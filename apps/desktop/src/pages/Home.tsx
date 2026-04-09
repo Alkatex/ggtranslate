@@ -1,4 +1,10 @@
 import { useNavigate } from 'react-router-dom'
+import { GameGrid } from '../components/GameGrid'
+import { HowItWorks } from '../components/HowItWorks'
+import { Security } from '../components/Security'
+import { LatencyMap } from '../components/LatencyMap'
+import { Reviews } from '../components/Reviews'
+import { FooterCTA } from '../components/FooterCTA'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -36,8 +42,7 @@ export function HomePage() {
               border: 'none', color: '#fff',
               padding: '10px 20px', borderRadius: '99px',
               cursor: 'pointer', fontSize: '13px',
-              fontFamily: 'Orbitron, sans-serif',
-              fontWeight: 600,
+              fontFamily: 'Orbitron, sans-serif', fontWeight: 600,
             }}>Se connecter →</button>
         </div>
       </nav>
@@ -65,11 +70,10 @@ export function HomePage() {
         <h1 style={{
           fontFamily: 'Orbitron, sans-serif',
           fontSize: '64px', fontWeight: 900,
-          lineHeight: 1.1, marginBottom: '24px',
-          color: '#fff',
+          lineHeight: 1.1, marginBottom: '24px', color: '#fff',
         }}>
           Joue avec{' '}
-          <span style={{ color: '#06b6d4' }}>n'importe qui</span>
+          <span style={{ color: '#06b6d4' }}>n&apos;importe qui</span>
           {' '}sur Terre.
         </h1>
 
@@ -100,8 +104,7 @@ export function HomePage() {
               {[4,7,5,8,6,9,5,7,4].map((h, i) => (
                 <div key={i} style={{
                   width: '3px', height: `${h * 2}px`,
-                  background: '#06b6d4', borderRadius: '2px',
-                  opacity: 0.8,
+                  background: '#06b6d4', borderRadius: '2px', opacity: 0.8,
                 }}/>
               ))}
             </div>
@@ -120,8 +123,7 @@ export function HomePage() {
               {[5,8,6,9,7,5,8,6,4].map((h, i) => (
                 <div key={i} style={{
                   width: '3px', height: `${h * 2}px`,
-                  background: '#06b6d4', borderRadius: '2px',
-                  opacity: 0.8,
+                  background: '#06b6d4', borderRadius: '2px', opacity: 0.8,
                 }}/>
               ))}
             </div>
@@ -129,9 +131,12 @@ export function HomePage() {
         </div>
 
         {/* CTA BUTTONS */}
-        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginBottom: '16px' }}>
+        <div style={{
+          display: 'flex', gap: '16px',
+          justifyContent: 'center', marginBottom: '16px',
+        }}>
           <button
-            onClick={() => navigate('/translate')}
+            onClick={() => navigate('/onboarding')}
             style={{
               background: 'linear-gradient(to right, #3b82f6, #06b6d4)',
               border: 'none', color: '#fff',
@@ -146,14 +151,12 @@ export function HomePage() {
             background: 'transparent',
             border: '1px solid #1e2d45',
             color: '#fff', padding: '16px 32px',
-            borderRadius: '99px', cursor: 'pointer',
-            fontSize: '16px',
+            borderRadius: '99px', cursor: 'pointer', fontSize: '16px',
           }}>Voir la démo</button>
         </div>
 
         <p style={{
-          color: '#475569', fontSize: '11px',
-          letterSpacing: '0.08em',
+          color: '#475569', fontSize: '11px', letterSpacing: '0.08em',
         }}>
           7 JOURS GRATUITS · AUCUNE CARTE BANCAIRE · ANNULATION EN 1 CLIC
         </p>
@@ -164,6 +167,7 @@ export function HomePage() {
         display: 'flex', justifyContent: 'center',
         gap: '64px', padding: '40px 48px',
         borderTop: '1px solid #1e2d45',
+        borderBottom: '1px solid #1e2d45',
       }}>
         {[
           { value: '10K+', label: 'GAMERS ACTIFS' },
@@ -183,6 +187,14 @@ export function HomePage() {
           </div>
         ))}
       </div>
+
+      {/* SECTIONS */}
+      <GameGrid />
+      <HowItWorks />
+      <Security />
+      <LatencyMap />
+      <Reviews />
+      <FooterCTA />
 
     </div>
   )
