@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsPanel } from '../components/SettingsPanel'
 
 const LANGUAGES = [
   { code: 'fr', flag: '🇫🇷', name: 'Français' },
@@ -17,9 +18,8 @@ export function TranslatePage() {
   const [sourceLang, setSourceLang] = useState('fr')
   const [targetLang, setTargetLang] = useState('en')
   const [liveState, setLiveState] = useState<LiveState>('inactive')
-
-  const source = LANGUAGES.find(l => l.code === sourceLang)!
-  const target = LANGUAGES.find(l => l.code === targetLang)!
+  const [activeEffect, setActiveEffect] = useState('normal')
+  const [showSettings, setShowSettings] = useState(false)
 
   const swapLanguages = () => {
     setSourceLang(targetLang)
@@ -46,6 +46,8 @@ export function TranslatePage() {
     translated: '✓ TRADUIT',
     error:      '! ERREUR',
   }
+
+  const EFFECTS = ['Normal', 'Robot', 'Deep', 'Chipmunk', 'Alien', 'Ghost']
 
   return (
     <div style={{
@@ -76,13 +78,23 @@ export function TranslatePage() {
           }}>TRADUCTION VOCALE GAMING</div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setShowSettings(true)}
+            style={{
+              background: 'transparent',
+              border: '1px solid #1e2d45',
+              color: '#94a3b8', padding: '6px 14px',
+              borderRadius: '8px', cursor: 'pointer',
+              fontSize: '16px',
+            }}>⚙️</button>
           {['Groupes', 'Plans'].map(item => (
             <button key={item} style={{
               background: 'transparent',
               border: '1px solid #1e2d45',
               color: '#94a3b8', padding: '6px 14px',
               borderRadius: '8px', cursor: 'pointer',
-              fontSize: '12px', fontFamily: 'Orbitron, sans-serif',
+              fontSize: '12px',
+              fontFamily: 'Orbitron, sans-serif',
             }}>{item}</button>
           ))}
         </div>
@@ -136,8 +148,7 @@ export function TranslatePage() {
               border: '1px solid #1e2d45', color: '#fff',
               padding: '12px 16px', borderRadius: '10px',
               fontSize: '14px', cursor: 'pointer',
-            }}
-          >
+            }}>
             {LANGUAGES.map(l => (
               <option key={l.code} value={l.code}>
                 {l.flag} {l.name}
@@ -160,7 +171,7 @@ export function TranslatePage() {
             color: '#06b6d4', fontSize: '11px',
             letterSpacing: '0.1em', marginBottom: '8px',
             fontFamily: 'Orbitron, sans-serif',
-          }}>J'ENTENDS</div>
+          }}>J&apos;ENTENDS</div>
           <select
             value={targetLang}
             onChange={e => setTargetLang(e.target.value)}
@@ -169,8 +180,7 @@ export function TranslatePage() {
               border: '1px solid #1e2d45', color: '#fff',
               padding: '12px 16px', borderRadius: '10px',
               fontSize: '14px', cursor: 'pointer',
-            }}
-          >
+            }}>
             {LANGUAGES.map(l => (
               <option key={l.code} value={l.code}>
                 {l.flag} {l.name}
@@ -180,39 +190,49 @@ export function TranslatePage() {
         </div>
       </div>
 
-      {/* MA VOIX PANEL */}
+      {/* MA VOIX + EFFETS DE VOIX */}
       <div style={{
         background: '#0d1424', border: '1px solid #1e2d45',
         borderRadius: '12px', padding: '20px',
-        marginBottom: '20px',
+        marginBottom: '16px',
       }}>
+        {/* HEADER MA VOIX */}
         <div style={{
           display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', marginBottom: '24px',
+          alignItems: 'center', marginBottom: '20px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ color: '#06b6d4', fontSize: '16px' }}>🎤</span>
             <div>
               <div style={{
                 fontFamily: 'Orbitron, sans-serif',
-                fontSize: '12px', color: '#fff', letterSpacing: '0.1em',
+                fontSize: '12px', color: '#fff',
+                letterSpacing: '0.1em',
               }}>MA VOIX</div>
-              <div style={{ color: '#475569', fontSize: '11px' }}>Microphone local</div>
+              <div style={{ color: '#475569', fontSize: '11px' }}>
+                Microphone local
+              </div>
             </div>
           </div>
           <div style={{
             color: liveColors[liveState],
-            fontSize: '11px', fontFamily: 'Orbitron, sans-serif',
+            fontSize: '11px',
+            fontFamily: 'Orbitron, sans-serif',
             letterSpacing: '0.08em',
           }}>
-            {liveState === 'inactive' ? '● APPUIE POUR DÉMARRER' : liveLabels[liveState]}
+            {liveState === 'inactive'
+              ? '● APPUIE POUR DÉMARRER'
+              : liveLabels[liveState]}
           </div>
         </div>
 
         {/* LIVE BUTTON */}
         <div style={{
           display: 'flex', flexDirection: 'column',
-          alignItems: 'center', gap: '16px', padding: '20px 0',
+          alignItems: 'center', gap: '16px',
+          padding: '20px 0',
+          borderBottom: '1px solid #1e2d45',
+          marginBottom: '20px',
         }}>
           <button
             onClick={toggleLive}
@@ -225,10 +245,11 @@ export function TranslatePage() {
               justifyContent: 'center', gap: '4px',
               transition: 'all 0.2s',
               boxShadow: liveState === 'listening'
-                ? `0 0 20px rgba(6,182,212,0.3)` : 'none',
-            }}
-          >
-            <span style={{ fontSize: '24px', color: liveColors[liveState] }}>◉</span>
+                ? '0 0 20px rgba(6,182,212,0.3)' : 'none',
+            }}>
+            <span style={{
+              fontSize: '24px', color: liveColors[liveState],
+            }}>◉</span>
             <span style={{
               fontFamily: 'Orbitron, sans-serif',
               fontSize: '10px', color: liveColors[liveState],
@@ -237,22 +258,110 @@ export function TranslatePage() {
           </button>
 
           <div style={{
-            color: liveColors[liveState],
-            fontSize: '11px', fontFamily: 'Orbitron, sans-serif',
+            color: liveColors[liveState], fontSize: '11px',
+            fontFamily: 'Orbitron, sans-serif',
             letterSpacing: '0.1em',
           }}>{liveLabels[liveState]}</div>
+
+          <div style={{
+            minHeight: '40px', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            color: '#475569', fontSize: '13px',
+          }}>
+            {liveState === 'inactive' && '— — — — — — — — —'}
+            {liveState === 'listening' && (
+              <span style={{ color: '#06b6d4' }}>
+                En attente de ta voix...
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* TRANSCRIPT AREA */}
+        {/* EFFETS DE VOIX */}
+        <div>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', marginBottom: '12px',
+          }}>
+            <div style={{
+              fontFamily: 'Orbitron, sans-serif',
+              fontSize: '11px', color: '#06b6d4',
+              letterSpacing: '0.1em',
+            }}>🎛️ EFFETS DE VOIX</div>
+            <span style={{
+              color: '#475569', fontSize: '11px', cursor: 'pointer',
+            }}>🔒 Unlock Starter</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {EFFECTS.map(effect => (
+              <button
+                key={effect}
+                onClick={() => setActiveEffect(effect.toLowerCase())}
+                style={{
+                  background: activeEffect === effect.toLowerCase()
+                    ? 'rgba(6,182,212,0.15)' : 'transparent',
+                  border: `1px solid ${activeEffect === effect.toLowerCase()
+                    ? '#06b6d4' : '#1e2d45'}`,
+                  color: activeEffect === effect.toLowerCase()
+                    ? '#06b6d4' : '#94a3b8',
+                  padding: '6px 14px', borderRadius: '8px',
+                  cursor: 'pointer', fontSize: '12px',
+                  transition: 'all 0.2s',
+                }}>{effect}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* AUTRES JOUEURS */}
+      <div style={{
+        background: '#0d1424', border: '1px solid #1e2d45',
+        borderRadius: '12px', padding: '20px',
+        marginBottom: '16px',
+      }}>
         <div style={{
-          minHeight: '60px', display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
-          color: '#475569', fontSize: '13px',
+          display: 'flex', alignItems: 'center',
+          gap: '10px', marginBottom: '16px',
         }}>
-          {liveState === 'inactive' && '— — — — — — — — —'}
-          {liveState === 'listening' && (
-            <span style={{ color: '#06b6d4' }}>En attente de ta voix...</span>
-          )}
+          <span style={{ fontSize: '18px' }}>🖥️</span>
+          <div>
+            <div style={{
+              fontFamily: 'Orbitron, sans-serif',
+              fontSize: '12px', color: '#fff',
+              letterSpacing: '0.1em',
+            }}>AUTRES JOUEURS</div>
+            <div style={{ color: '#475569', fontSize: '11px' }}>
+              Capture audio système / onglet
+            </div>
+          </div>
+        </div>
+
+        <button style={{
+          background: 'transparent',
+          border: '1px solid #1e2d45',
+          color: '#94a3b8', padding: '8px 16px',
+          borderRadius: '8px', cursor: 'pointer',
+          fontSize: '12px', display: 'flex',
+          alignItems: 'center', gap: '8px',
+          fontFamily: 'Orbitron, sans-serif',
+          marginBottom: '12px',
+        }}>🖥️ CAPTURER</button>
+
+        <div style={{
+          padding: '12px', background: '#111827',
+          borderRadius: '8px', fontSize: '12px',
+          color: '#94a3b8', lineHeight: 1.6,
+          border: '1px solid #1e2d45',
+        }}>
+          Clique "Capturer" → sélectionne l&apos;onglet Discord/jeu → coche{' '}
+          <strong style={{ color: '#fff' }}>
+            "Partager l&apos;audio de l&apos;onglet"
+          </strong>.
+          <div style={{
+            marginTop: '8px', color: '#f97316', fontSize: '11px',
+          }}>
+            ⚠️ Fonctionne mieux avec un onglet Discord Web.
+          </div>
         </div>
       </div>
 
@@ -283,6 +392,12 @@ export function TranslatePage() {
           ))}
         </div>
       </div>
+
+      {/* SETTINGS PANEL */}
+      {showSettings && (
+        <SettingsPanel onClose={() => setShowSettings(false)} />
+      )}
+
     </div>
   )
 }
