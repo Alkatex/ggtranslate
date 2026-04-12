@@ -24,79 +24,111 @@ export interface PipelineConfig {
 export class TranslationPipeline {
   private stt: DeepgramSTT
   private config: PipelineConfig | null = null
+  private sessionId = 0
+  private isRunning = false
 
   constructor() {
     this.stt = new DeepgramSTT()
   }
 
   async start(config: PipelineConfig) {
+    if (this.isRunning) {
+      this.stop()
+    }
+
+    this.sessionId += 1
+    const currentSessionId = this.sessionId
+
     this.config = config
+    this.isRunning = true
 
     try {
       await this.stt.init()
+
+      if (!this.isSessionActive(currentSessionId)) return
+
       config.onStateChange('listening')
 
       await this.stt.start(config.micDeviceId, {
         language: config.sourceLang,
 
         onTranscript: (text, isFinal) => {
-          // Affiche toujours le transcript en temps réel
+          if (!this.isSessionActive(currentSessionId)) return
+
           config.onTranscript(text, isFinal)
 
-          // Chaque phrase finale est traduite indépendamment
-          // Aucun mutex — toutes les phrases sont capturées
           if (isFinal && text.trim()) {
-            this.processFinalTranscript(text)
+            this.processFinalTranscript(text, config, currentSessionId)
           }
         },
 
         onError: (error) => {
+          if (!this.isSessionActive(currentSessionId)) return
+
           config.onStateChange('error')
           config.onError(error)
         },
       })
-
     } catch (err) {
+      if (!this.isSessionActive(currentSessionId)) return
+
       config.onStateChange('error')
       config.onError('Impossible de démarrer le pipeline')
     }
   }
 
-  private async processFinalTranscript(text: string) {
-    if (!this.config) return
+  private isSessionActive(sessionId: number): boolean {
+    return this.isRunning && this.sessionId === sessionId
+  }
+
+  private async processFinalTranscript(
+    text: string,
+    config: PipelineConfig,
+    sessionId: number
+  ) {
+    if (!this.isSessionActive(sessionId)) return
 
     try {
-      // Indicateur visuel — micro continue d'écouter
-      this.config.onStateChange('processing')
+      config.onStateChange('processing')
 
-      // Traduire
       const translated = await translateText(
         text,
-        this.config.sourceLang,
-        this.config.targetLang
+        config.sourceLang,
+        config.targetLang
       )
 
-      this.config.onTranslated(translated)
+      if (!this.isSessionActive(sessionId)) return
 
-      // Retour immédiat en listening
-      this.config.onStateChange('listening')
+      config.onTranslated(translated)
+      config.onStateChange('listening')
 
-      // TTS en parallèle — queue gère l'ordre
       speakTranslation(
         translated,
-        this.config.headsetDeviceId,
-        this.config.targetLang
-      ).catch(err => console.error('Erreur TTS:', err))
-
+        config.headsetDeviceId,
+        config.targetLang
+      ).catch((err) => {
+        console.error('Erreur TTS:', err)
+      })
     } catch (err) {
       console.error('Erreur traduction:', err)
-      this.config?.onStateChange('listening')
+
+      if (!this.isSessionActive(sessionId)) return
+
+      config.onStateChange('listening')
     }
   }
 
   stop() {
+    this.isRunning = false
+    this.sessionId += 1
+
     this.stt.stop()
     clearTTSQueue()
-    this.config?.onStateChange('inactive')
+
+    if (this.config) {
+      this.config.onStateChange('inactive')
+    }
+
+    this.config = null
   }
 }

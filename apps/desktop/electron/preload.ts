@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('electron', {
     start: (language: string) => ipcRenderer.invoke('stt:start', language),
     stop: () => ipcRenderer.invoke('stt:stop'),
     sendChunk: (chunk: ArrayBuffer) => ipcRenderer.invoke('stt:sendChunk', chunk),
-    onTranscript: (callback: (data: { text: string, isFinal: boolean }) => void) => {
+    onTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => {
       ipcRenderer.on('stt:transcript', (_event, data) => callback(data))
     },
     onState: (callback: (state: string) => void) => {
@@ -52,8 +52,8 @@ declare global {
       stt: {
         start: (language: string) => Promise<{ success: boolean }>
         stop: () => Promise<{ success: boolean }>
-        sendChunk: (chunk: ArrayBuffer) => void
-        onTranscript: (callback: (data: { text: string, isFinal: boolean }) => void) => void
+        sendChunk: (chunk: ArrayBuffer) => Promise<{ success: boolean }>
+        onTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => void
         onState: (callback: (state: string) => void) => void
         onError: (callback: (error: string) => void) => void
         removeListeners: () => void

@@ -60,7 +60,9 @@ app.whenReady().then(() => {
       callback(allowed.includes(permission))
     }
   )
+
   createWindow()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -74,17 +76,30 @@ app.on('window-all-closed', () => {
 ipcMain.handle('settings:get', (_event, key: string) => {
   return store.get(key)
 })
+
 ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
   store.set(key, value)
   return true
 })
-ipcMain.handle('settings:getAll', () => store.store)
-ipcMain.handle('app:getVersion', () => app.getVersion())
-ipcMain.handle('app:getPlatform', () => process.platform)
+
+ipcMain.handle('settings:getAll', () => {
+  return store.store
+})
+
+ipcMain.handle('app:getVersion', () => {
+  return app.getVersion()
+})
+
+ipcMain.handle('app:getPlatform', () => {
+  return process.platform
+})
 
 // ─── IPC STT ──────────────────────────────────────────────────────────────────
 ipcMain.handle('stt:start', async (_event, language: string) => {
-  if (!mainWindow) throw new Error('Fenêtre non disponible')
+  if (!mainWindow) {
+    throw new Error('Fenêtre non disponible')
+  }
+
   await startSTTSession(mainWindow, language)
   return { success: true }
 })
@@ -96,4 +111,5 @@ ipcMain.handle('stt:stop', async () => {
 
 ipcMain.handle('stt:sendChunk', (_event, chunk: ArrayBuffer) => {
   sendAudioChunk(Buffer.from(chunk))
+  return { success: true }
 })
