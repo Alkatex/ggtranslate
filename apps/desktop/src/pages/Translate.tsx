@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { TranslationPipeline, PipelineState } from '../lib/pipeline'
+import { startOtherPlayers, stopOtherPlayers, OtherPlayersState } from '../lib/otherPlayersPipeline'
 
 const LANGUAGES = [
   { code: 'fr', flag: '🇫🇷', name: 'Français' },
@@ -26,25 +27,28 @@ export function TranslatePage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [micDeviceId, setMicDeviceId] = useState<string | null>(null)
   const [headsetDeviceId, setHeadsetDeviceId] = useState<string | null>(null)
+  const [otherPlayersState, setOtherPlayersState] = useState<OtherPlayersState>('inactive')
+  const [otherTranscript, setOtherTranscript] = useState('')
+  const [otherTranslated, setOtherTranslated] = useState('')
+  const [otherError, setOtherError] = useState('')
 
   const pipelineRef = useRef<TranslationPipeline | null>(null)
 
   useEffect(() => {
     pipelineRef.current = new TranslationPipeline()
 
-    // Charger les devices sauvegardés au démarrage
     async function loadSavedDevices() {
       const savedMic = await window.electron.settings.get('micDeviceId') as string
       const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
       if (savedMic) setMicDeviceId(savedMic)
       if (savedHeadset) setHeadsetDeviceId(savedHeadset)
-      console.log('🔧 Devices chargés — mic:', savedMic, '| headset:', savedHeadset)
     }
 
     loadSavedDevices()
 
     return () => {
       pipelineRef.current?.stop()
+      stopOtherPlayers()
     }
   }, [])
 
@@ -58,7 +62,6 @@ export function TranslatePage() {
       setTranscript('')
       setTranslated('')
       setErrorMsg('')
-
       await pipelineRef.current?.start({
         micDeviceId,
         headsetDeviceId,
@@ -78,6 +81,29 @@ export function TranslatePage() {
     }
   }
 
+  const toggleOtherPlayers = async () => {
+    if (otherPlayersState === 'inactive') {
+      setOtherTranscript('')
+      setOtherTranslated('')
+      setOtherError('')
+      await startOtherPlayers({
+        headsetDeviceId,
+        sourceLang: targetLang,
+        targetLang: sourceLang,
+        onStateChange: setOtherPlayersState,
+        onTranscript: (text, _isFinal) => setOtherTranscript(text),
+        onTranslated: (text) => setOtherTranslated(text),
+        onError: (error) => {
+          setOtherError(error)
+          setOtherPlayersState('error')
+        },
+      })
+    } else {
+      stopOtherPlayers()
+      setOtherPlayersState('inactive')
+    }
+  }
+
   const liveColors: Record<PipelineState, string> = {
     inactive:   '#475569',
     listening:  '#06b6d4',
@@ -91,6 +117,20 @@ export function TranslatePage() {
     listening:  '● ÉCOUTE EN COURS',
     processing: '⟳ TRADUCTION...',
     translated: '✓ TRADUIT',
+    error:      '! ERREUR',
+  }
+
+  const otherColors: Record<OtherPlayersState, string> = {
+    inactive:   '#475569',
+    listening:  '#a855f7',
+    processing: '#3b82f6',
+    error:      '#ef4444',
+  }
+
+  const otherLabels: Record<OtherPlayersState, string> = {
+    inactive:   'INACTIF',
+    listening:  '● CAPTURE EN COURS',
+    processing: '⟳ TRADUCTION...',
     error:      '! ERREUR',
   }
 
@@ -271,7 +311,6 @@ export function TranslatePage() {
           </div>
         </div>
 
-        {/* LIVE BUTTON */}
         <div style={{
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', gap: '16px',
@@ -294,9 +333,7 @@ export function TranslatePage() {
                 ? '0 0 20px rgba(6,182,212,0.3)' : 'none',
               opacity: isLocked ? 0.7 : 1,
             }}>
-            <span style={{
-              fontSize: '24px', color: liveColors[liveState],
-            }}>◉</span>
+            <span style={{ fontSize: '24px', color: liveColors[liveState] }}>◉</span>
             <span style={{
               fontFamily: 'Orbitron, sans-serif',
               fontSize: '10px', color: liveColors[liveState],
@@ -310,7 +347,6 @@ export function TranslatePage() {
             letterSpacing: '0.1em',
           }}>{liveLabels[liveState]}</div>
 
-          {/* TRANSCRIPT */}
           <div style={{
             width: '100%', minHeight: '60px',
             background: '#111827', borderRadius: '8px',
@@ -349,9 +385,9 @@ export function TranslatePage() {
               fontSize: '11px', color: '#06b6d4',
               letterSpacing: '0.1em',
             }}>🎛️ EFFETS DE VOIX</div>
-            <span style={{
-              color: '#475569', fontSize: '11px', cursor: 'pointer',
-            }}>🔒 Unlock Starter</span>
+            <span style={{ color: '#475569', fontSize: '11px', cursor: 'pointer' }}>
+              🔒 Unlock Starter
+            </span>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {EFFECTS.map(effect => (
@@ -381,48 +417,76 @@ export function TranslatePage() {
         marginBottom: '16px',
       }}>
         <div style={{
-          display: 'flex', alignItems: 'center',
-          gap: '10px', marginBottom: '16px',
+          display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', marginBottom: '16px',
         }}>
-          <span style={{ fontSize: '18px' }}>🖥️</span>
-          <div>
-            <div style={{
-              fontFamily: 'Orbitron, sans-serif',
-              fontSize: '12px', color: '#fff',
-              letterSpacing: '0.1em',
-            }}>AUTRES JOUEURS</div>
-            <div style={{ color: '#475569', fontSize: '11px' }}>
-              Capture audio système / onglet
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>🖥️</span>
+            <div>
+              <div style={{
+                fontFamily: 'Orbitron, sans-serif',
+                fontSize: '12px', color: '#fff',
+                letterSpacing: '0.1em',
+              }}>AUTRES JOUEURS</div>
+              <div style={{ color: '#475569', fontSize: '11px' }}>
+                Capture audio système native Windows
+              </div>
             </div>
+          </div>
+          <div style={{
+            color: otherColors[otherPlayersState],
+            fontSize: '11px',
+            fontFamily: 'Orbitron, sans-serif',
+          }}>
+            {otherLabels[otherPlayersState]}
           </div>
         </div>
 
-        <button style={{
-          background: 'transparent',
-          border: '1px solid #1e2d45',
-          color: '#94a3b8', padding: '8px 16px',
-          borderRadius: '8px', cursor: 'pointer',
-          fontSize: '12px', display: 'flex',
-          alignItems: 'center', gap: '8px',
-          fontFamily: 'Orbitron, sans-serif',
-          marginBottom: '12px',
-        }}>🖥️ CAPTURER</button>
+        <button
+          onClick={toggleOtherPlayers}
+          style={{
+            background: otherPlayersState !== 'inactive'
+              ? 'rgba(168,85,247,0.15)' : 'transparent',
+            border: `1px solid ${otherPlayersState !== 'inactive' ? '#a855f7' : '#1e2d45'}`,
+            color: otherPlayersState !== 'inactive' ? '#a855f7' : '#94a3b8',
+            padding: '8px 16px',
+            borderRadius: '8px', cursor: 'pointer',
+            fontSize: '12px', display: 'flex',
+            alignItems: 'center', gap: '8px',
+            fontFamily: 'Orbitron, sans-serif',
+            marginBottom: '12px',
+            transition: 'all 0.2s',
+          }}>
+          {otherPlayersState !== 'inactive' ? '⏹ ARRÊTER' : '🖥️ CAPTURER'}
+        </button>
 
         <div style={{
           padding: '12px', background: '#111827',
-          borderRadius: '8px', fontSize: '12px',
+          borderRadius: '8px', fontSize: '13px',
           color: '#94a3b8', lineHeight: 1.6,
           border: '1px solid #1e2d45',
+          minHeight: '60px',
         }}>
-          Clique "Capturer" → sélectionne l&apos;onglet Discord/jeu → coche{' '}
-          <strong style={{ color: '#fff' }}>
-            "Partager l&apos;audio de l&apos;onglet"
-          </strong>.
-          <div style={{
-            marginTop: '8px', color: '#f97316', fontSize: '11px',
-          }}>
-            ⚠️ Fonctionne mieux avec un onglet Discord Web.
-          </div>
+          {otherPlayersState === 'inactive' && !otherTranscript && (
+            <span style={{ color: '#475569', fontSize: '12px' }}>
+              Clique "Capturer" pour traduire les autres joueurs en temps réel.
+            </span>
+          )}
+          {otherTranscript && (
+            <div>
+              <span style={{ color: '#fff' }}>{otherTranscript}</span>
+              {otherTranslated && (
+                <div style={{
+                  marginTop: '8px', paddingTop: '8px',
+                  borderTop: '1px solid #1e2d45',
+                  color: '#a855f7', fontSize: '13px',
+                }}>→ {otherTranslated}</div>
+              )}
+            </div>
+          )}
+          {otherError && (
+            <span style={{ color: '#ef4444', fontSize: '12px' }}>{otherError}</span>
+          )}
         </div>
       </div>
 

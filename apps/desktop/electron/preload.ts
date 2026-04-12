@@ -16,8 +16,8 @@ contextBridge.exposeInMainWorld('electron', {
   stt: {
     start: (language: string) => ipcRenderer.invoke('stt:start', language),
     stop: () => ipcRenderer.invoke('stt:stop'),
-    sendChunk: (chunk: ArrayBuffer) => ipcRenderer.invoke('stt:sendChunk', chunk),
-    onTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => {
+    sendChunk: (chunk: ArrayBuffer) => ipcRenderer.send('stt:sendChunk', chunk),
+    onTranscript: (callback: (data: { text: string, isFinal: boolean }) => void) => {
       ipcRenderer.on('stt:transcript', (_event, data) => callback(data))
     },
     onState: (callback: (state: string) => void) => {
@@ -30,6 +30,33 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.removeAllListeners('stt:transcript')
       ipcRenderer.removeAllListeners('stt:state')
       ipcRenderer.removeAllListeners('stt:error')
+    },
+  },
+  otherPlayers: {
+    start: (language: string, targetLang: string) =>
+      ipcRenderer.invoke('other-players:start', language, targetLang),
+    stop: () => ipcRenderer.invoke('other-players:stop'),
+    onChunk: (callback: (chunk: Buffer) => void) => {
+      ipcRenderer.on('other-players:chunk', (_event, chunk) => callback(chunk))
+    },
+    onState: (callback: (state: string) => void) => {
+      ipcRenderer.on('other-players:state', (_event, state) => callback(state))
+    },
+    onError: (callback: (error: string) => void) => {
+      ipcRenderer.on('other-players:error', (_event, error) => callback(error))
+    },
+    onTranscript: (callback: (data: { text: string, isFinal: boolean }) => void) => {
+      ipcRenderer.on('other-players:transcript', (_event, data) => callback(data))
+    },
+    onTranslated: (callback: (text: string) => void) => {
+      ipcRenderer.on('other-players:translated', (_event, text) => callback(text))
+    },
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('other-players:chunk')
+      ipcRenderer.removeAllListeners('other-players:state')
+      ipcRenderer.removeAllListeners('other-players:error')
+      ipcRenderer.removeAllListeners('other-players:transcript')
+      ipcRenderer.removeAllListeners('other-players:translated')
     },
   },
 })
@@ -52,10 +79,20 @@ declare global {
       stt: {
         start: (language: string) => Promise<{ success: boolean }>
         stop: () => Promise<{ success: boolean }>
-        sendChunk: (chunk: ArrayBuffer) => Promise<{ success: boolean }>
-        onTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => void
+        sendChunk: (chunk: ArrayBuffer) => void
+        onTranscript: (callback: (data: { text: string, isFinal: boolean }) => void) => void
         onState: (callback: (state: string) => void) => void
         onError: (callback: (error: string) => void) => void
+        removeListeners: () => void
+      }
+      otherPlayers: {
+        start: (language: string, targetLang: string) => Promise<{ success: boolean }>
+        stop: () => Promise<{ success: boolean }>
+        onChunk: (callback: (chunk: Buffer) => void) => void
+        onState: (callback: (state: string) => void) => void
+        onError: (callback: (error: string) => void) => void
+        onTranscript: (callback: (data: { text: string, isFinal: boolean }) => void) => void
+        onTranslated: (callback: (text: string) => void) => void
         removeListeners: () => void
       }
     }

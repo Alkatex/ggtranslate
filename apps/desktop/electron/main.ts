@@ -17,6 +17,7 @@ for (let i = 0; i < 6; i++) {
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import Store from 'electron-store'
 import { startSTTSession, sendAudioChunk, stopSTTSession } from './sttService'
+import { startOtherPlayersPipeline, stopOtherPlayersPipeline } from './services/otherPlayersPipeline'
 
 const store = new Store()
 const isDev = !app.isPackaged
@@ -60,9 +61,7 @@ app.whenReady().then(() => {
       callback(allowed.includes(permission))
     }
   )
-
   createWindow()
-
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -76,30 +75,17 @@ app.on('window-all-closed', () => {
 ipcMain.handle('settings:get', (_event, key: string) => {
   return store.get(key)
 })
-
 ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
   store.set(key, value)
   return true
 })
-
-ipcMain.handle('settings:getAll', () => {
-  return store.store
-})
-
-ipcMain.handle('app:getVersion', () => {
-  return app.getVersion()
-})
-
-ipcMain.handle('app:getPlatform', () => {
-  return process.platform
-})
+ipcMain.handle('settings:getAll', () => store.store)
+ipcMain.handle('app:getVersion', () => app.getVersion())
+ipcMain.handle('app:getPlatform', () => process.platform)
 
 // ─── IPC STT ──────────────────────────────────────────────────────────────────
 ipcMain.handle('stt:start', async (_event, language: string) => {
-  if (!mainWindow) {
-    throw new Error('Fenêtre non disponible')
-  }
-
+  if (!mainWindow) throw new Error('Fenêtre non disponible')
   await startSTTSession(mainWindow, language)
   return { success: true }
 })
@@ -109,7 +95,22 @@ ipcMain.handle('stt:stop', async () => {
   return { success: true }
 })
 
-ipcMain.handle('stt:sendChunk', (_event, chunk: ArrayBuffer) => {
+ipcMain.on('stt:sendChunk', (_event, chunk: ArrayBuffer) => {
   sendAudioChunk(Buffer.from(chunk))
+})
+
+// ─── IPC Other Players ────────────────────────────────────────────────────────
+ipcMain.handle('other-players:start', async (_event, language: string, targetLang: string) => {
+  if (!mainWindow) throw new Error('Fenêtre non disponible')
+  await startOtherPlayersPipeline({
+    win: mainWindow,
+    language,
+    targetLang,
+  })
+  return { success: true }
+})
+
+ipcMain.handle('other-players:stop', async () => {
+  stopOtherPlayersPipeline()
   return { success: true }
 })
