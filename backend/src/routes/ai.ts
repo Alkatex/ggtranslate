@@ -4,14 +4,17 @@ const router = Router()
 
 router.get('/stt-token', async (_req, res) => {
   const apiKey = process.env.DEEPGRAM_API_KEY
+
   if (!apiKey) {
     return res.status(500).json({ error: 'Deepgram API key manquante' })
   }
+
   return res.json({ token: apiKey })
 })
 
 router.post('/translate', async (req, res) => {
   const { text, sourceLang, targetLang } = req.body || {}
+
   console.log('🌐 Traduction demandée:', { text, sourceLang, targetLang })
 
   if (!text || !targetLang) {
@@ -27,6 +30,7 @@ router.post('/translate', async (req, res) => {
     const params = new URLSearchParams()
     params.append('text', String(text))
     params.append('target_lang', String(targetLang).toUpperCase())
+
     if (sourceLang && String(sourceLang).trim()) {
       params.append('source_lang', String(sourceLang).toUpperCase())
     }
@@ -44,7 +48,11 @@ router.post('/translate', async (req, res) => {
     console.log('📡 DeepL status:', response.status)
 
     let data: any = null
-    try { data = rawText ? JSON.parse(rawText) : null } catch { data = null }
+    try {
+      data = rawText ? JSON.parse(rawText) : null
+    } catch {
+      data = null
+    }
 
     if (!response.ok) {
       return res.status(response.status).json({
@@ -54,11 +62,15 @@ router.post('/translate', async (req, res) => {
     }
 
     const translatedText = data?.translations?.[0]?.text
+
     if (!translatedText) {
       return res.status(500).json({ error: 'Réponse DeepL invalide' })
     }
 
-    return res.json({ translatedText, translated: translatedText })
+    return res.json({
+      translatedText,
+      translated: translatedText,
+    })
   } catch (err: any) {
     console.error('❌ Erreur DeepL:', err)
     return res.status(500).json({ error: 'Erreur traduction DeepL' })
@@ -66,7 +78,7 @@ router.post('/translate', async (req, res) => {
 })
 
 router.post('/tts', async (req, res) => {
-  const { text, voice = 'aura-luna-en' } = req.body || {}
+  const { text, voice = 'aura-2-thalia-en' } = req.body || {}
 
   if (!text) {
     return res.status(400).json({ error: 'text requis' })
@@ -78,10 +90,13 @@ router.post('/tts', async (req, res) => {
   }
 
   try {
-    console.log('🔊 TTS Deepgram demandé:', { text: text.slice(0, 50), voice })
+    console.log('🔊 TTS Deepgram demandé:', {
+      text: String(text).slice(0, 80),
+      voice,
+    })
 
     const response = await fetch(
-      `https://api.deepgram.com/v1/speak?model=${voice}`,
+      `https://api.deepgram.com/v1/speak?model=${encodeURIComponent(voice)}`,
       {
         method: 'POST',
         headers: {
@@ -97,6 +112,7 @@ router.post('/tts', async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text()
       console.error('❌ Erreur TTS Deepgram:', response.status, errorText)
+
       return res.status(response.status).json({
         error: 'Erreur TTS Deepgram',
         details: errorText,
@@ -108,7 +124,10 @@ router.post('/tts', async (req, res) => {
     return res.send(Buffer.from(audioBuffer))
   } catch (err: any) {
     console.error('❌ Erreur TTS:', err)
-    return res.status(500).json({ error: 'Erreur TTS Deepgram' })
+    return res.status(500).json({
+      error: 'Erreur TTS Deepgram',
+      details: err?.message || String(err),
+    })
   }
 })
 

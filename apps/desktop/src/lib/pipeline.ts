@@ -1,9 +1,6 @@
-// Pipeline complet — orchestre STT → Traduction → TTS
-// C'est le cerveau de l'app
-
 import { DeepgramSTT } from './deepgram'
 import { translateText } from './translation'
-import { speakTranslation } from './tts'
+import { speakTranslation, clearTTSQueue } from './tts'
 
 export type PipelineState =
   | 'inactive'
@@ -27,8 +24,6 @@ export interface PipelineConfig {
 export class TranslationPipeline {
   private stt: DeepgramSTT
   private config: PipelineConfig | null = null
-  private isProcessing = false
-  private pendingTranscript = ''
 
   constructor() {
     this.stt = new DeepgramSTT()
@@ -36,27 +31,22 @@ export class TranslationPipeline {
 
   async start(config: PipelineConfig) {
     this.config = config
-    this.isProcessing = false
-    this.pendingTranscript = ''
 
     try {
-      // Initialiser Deepgram (récupère le token depuis le backend)
       await this.stt.init()
-
       config.onStateChange('listening')
 
-      // Démarrer la capture et transcription
       await this.stt.start(config.micDeviceId, {
         language: config.sourceLang,
 
-        onTranscript: async (text, isFinal) => {
-          // Affiche le transcript en temps réel (interim)
+        onTranscript: (text, isFinal) => {
+          // Affiche toujours le transcript en temps réel
           config.onTranscript(text, isFinal)
-          this.pendingTranscript = text
 
-          // Quand la phrase est finale → traduire + TTS
-          if (isFinal && text.trim() && !this.isProcessing) {
-            await this.processFinalTranscript(text)
+          // Chaque phrase finale est traduite indépendamment
+          // Aucun mutex — toutes les phrases sont capturées
+          if (isFinal && text.trim()) {
+            this.processFinalTranscript(text)
           }
         },
 
@@ -75,12 +65,11 @@ export class TranslationPipeline {
   private async processFinalTranscript(text: string) {
     if (!this.config) return
 
-    // MUTEX — empêche les appels simultanés
-    this.isProcessing = true
-    this.config.onStateChange('processing')
-
     try {
-      // 1. Traduire via DeepL
+      // Indicateur visuel — micro continue d'écouter
+      this.config.onStateChange('processing')
+
+      // Traduire
       const translated = await translateText(
         text,
         this.config.sourceLang,
@@ -88,32 +77,26 @@ export class TranslationPipeline {
       )
 
       this.config.onTranslated(translated)
-      this.config.onStateChange('translated')
 
-      // 2. TTS → jouer dans le casque
-      await speakTranslation(
-        translated,
-        this.config.headsetDeviceId,
-        'alloy'
-      )
-
-      // 3. Retour en écoute — APRÈS que le TTS soit terminé
-      // Critique : on ne réactive pas le micro avant que l'audio soit fini
-      // Sinon boucle garantie
+      // Retour immédiat en listening
       this.config.onStateChange('listening')
 
+      // TTS en parallèle — queue gère l'ordre
+      speakTranslation(
+        translated,
+        this.config.headsetDeviceId,
+        this.config.targetLang
+      ).catch(err => console.error('Erreur TTS:', err))
+
     } catch (err) {
-      this.config.onStateChange('error')
-      this.config.onError('Erreur pipeline traduction')
-    } finally {
-      this.isProcessing = false
+      console.error('Erreur traduction:', err)
+      this.config?.onStateChange('listening')
     }
   }
 
   stop() {
     this.stt.stop()
-    this.isProcessing = false
-    this.pendingTranscript = ''
+    clearTTSQueue()
     this.config?.onStateChange('inactive')
   }
 }
