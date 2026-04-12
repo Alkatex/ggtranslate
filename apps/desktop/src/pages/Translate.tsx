@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { SettingsPanel } from '../components/SettingsPanel'
+import { TranslationPipeline, PipelineState } from '../lib/pipeline'
 
 const LANGUAGES = [
   { code: 'fr', flag: '🇫🇷', name: 'Français' },
@@ -12,26 +13,72 @@ const LANGUAGES = [
   { code: 'zh', flag: '🇨🇳', name: '中文' },
 ]
 
-type LiveState = 'inactive' | 'listening' | 'processing' | 'translated' | 'error'
+const EFFECTS = ['Normal', 'Robot', 'Deep', 'Chipmunk', 'Alien', 'Ghost']
 
 export function TranslatePage() {
   const [sourceLang, setSourceLang] = useState('fr')
   const [targetLang, setTargetLang] = useState('en')
-  const [liveState, setLiveState] = useState<LiveState>('inactive')
+  const [liveState, setLiveState] = useState<PipelineState>('inactive')
   const [activeEffect, setActiveEffect] = useState('normal')
   const [showSettings, setShowSettings] = useState(false)
+  const [transcript, setTranscript] = useState('')
+  const [translated, setTranslated] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
+  const [micDeviceId, setMicDeviceId] = useState<string | null>(null)
+  const [headsetDeviceId, setHeadsetDeviceId] = useState<string | null>(null)
+
+  const pipelineRef = useRef<TranslationPipeline | null>(null)
+
+  useEffect(() => {
+    pipelineRef.current = new TranslationPipeline()
+
+    // Charger les devices sauvegardés au démarrage
+    async function loadSavedDevices() {
+      const savedMic = await window.electron.settings.get('micDeviceId') as string
+      const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
+      if (savedMic) setMicDeviceId(savedMic)
+      if (savedHeadset) setHeadsetDeviceId(savedHeadset)
+      console.log('🔧 Devices chargés — mic:', savedMic, '| headset:', savedHeadset)
+    }
+
+    loadSavedDevices()
+
+    return () => {
+      pipelineRef.current?.stop()
+    }
+  }, [])
 
   const swapLanguages = () => {
     setSourceLang(targetLang)
     setTargetLang(sourceLang)
   }
 
-  const toggleLive = () => {
-    if (liveState === 'inactive') setLiveState('listening')
-    else setLiveState('inactive')
+  const toggleLive = async () => {
+    if (liveState === 'inactive') {
+      setTranscript('')
+      setTranslated('')
+      setErrorMsg('')
+
+      await pipelineRef.current?.start({
+        micDeviceId,
+        headsetDeviceId,
+        sourceLang,
+        targetLang,
+        onStateChange: (state) => setLiveState(state),
+        onTranscript: (text, _isFinal) => setTranscript(text),
+        onTranslated: (text) => setTranslated(text),
+        onError: (error) => {
+          setErrorMsg(error)
+          setLiveState('error')
+        },
+      })
+    } else {
+      pipelineRef.current?.stop()
+      setLiveState('inactive')
+    }
   }
 
-  const liveColors: Record<LiveState, string> = {
+  const liveColors: Record<PipelineState, string> = {
     inactive:   '#475569',
     listening:  '#06b6d4',
     processing: '#3b82f6',
@@ -39,7 +86,7 @@ export function TranslatePage() {
     error:      '#ef4444',
   }
 
-  const liveLabels: Record<LiveState, string> = {
+  const liveLabels: Record<PipelineState, string> = {
     inactive:   'SESSION INACTIVE',
     listening:  '● ÉCOUTE EN COURS',
     processing: '⟳ TRADUCTION...',
@@ -47,7 +94,7 @@ export function TranslatePage() {
     error:      '! ERREUR',
   }
 
-  const EFFECTS = ['Normal', 'Robot', 'Deep', 'Chipmunk', 'Alien', 'Ghost']
+  const isLocked = liveState === 'processing'
 
   return (
     <div style={{
@@ -190,13 +237,12 @@ export function TranslatePage() {
         </div>
       </div>
 
-      {/* MA VOIX + EFFETS DE VOIX */}
+      {/* MA VOIX + EFFETS */}
       <div style={{
         background: '#0d1424', border: '1px solid #1e2d45',
         borderRadius: '12px', padding: '20px',
         marginBottom: '16px',
       }}>
-        {/* HEADER MA VOIX */}
         <div style={{
           display: 'flex', justifyContent: 'space-between',
           alignItems: 'center', marginBottom: '20px',
@@ -210,13 +256,12 @@ export function TranslatePage() {
                 letterSpacing: '0.1em',
               }}>MA VOIX</div>
               <div style={{ color: '#475569', fontSize: '11px' }}>
-                Microphone local
+                {micDeviceId ? '✅ Micro configuré' : 'Micro par défaut'}
               </div>
             </div>
           </div>
           <div style={{
-            color: liveColors[liveState],
-            fontSize: '11px',
+            color: liveColors[liveState], fontSize: '11px',
             fontFamily: 'Orbitron, sans-serif',
             letterSpacing: '0.08em',
           }}>
@@ -236,16 +281,18 @@ export function TranslatePage() {
         }}>
           <button
             onClick={toggleLive}
+            disabled={isLocked}
             style={{
               width: '96px', height: '96px', borderRadius: '50%',
               background: '#111827',
               border: `2px solid ${liveColors[liveState]}`,
-              cursor: 'pointer', display: 'flex',
-              flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', gap: '4px',
-              transition: 'all 0.2s',
+              cursor: isLocked ? 'not-allowed' : 'pointer',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              gap: '4px', transition: 'all 0.2s',
               boxShadow: liveState === 'listening'
                 ? '0 0 20px rgba(6,182,212,0.3)' : 'none',
+              opacity: isLocked ? 0.7 : 1,
             }}>
             <span style={{
               fontSize: '24px', color: liveColors[liveState],
@@ -263,16 +310,30 @@ export function TranslatePage() {
             letterSpacing: '0.1em',
           }}>{liveLabels[liveState]}</div>
 
+          {/* TRANSCRIPT */}
           <div style={{
-            minHeight: '40px', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            color: '#475569', fontSize: '13px',
+            width: '100%', minHeight: '60px',
+            background: '#111827', borderRadius: '8px',
+            padding: '12px 16px', fontSize: '14px',
+            color: '#94a3b8', lineHeight: 1.6,
           }}>
-            {liveState === 'inactive' && '— — — — — — — — —'}
-            {liveState === 'listening' && (
-              <span style={{ color: '#06b6d4' }}>
-                En attente de ta voix...
-              </span>
+            {liveState === 'inactive' && !transcript && (
+              <span style={{ color: '#475569' }}>— — — — — — — — —</span>
+            )}
+            {transcript && (
+              <div>
+                <span style={{ color: '#fff' }}>{transcript}</span>
+                {translated && (
+                  <div style={{
+                    marginTop: '8px', paddingTop: '8px',
+                    borderTop: '1px solid #1e2d45',
+                    color: '#06b6d4', fontSize: '14px',
+                  }}>→ {translated}</div>
+                )}
+              </div>
+            )}
+            {errorMsg && (
+              <span style={{ color: '#ef4444' }}>{errorMsg}</span>
             )}
           </div>
         </div>
@@ -395,9 +456,14 @@ export function TranslatePage() {
 
       {/* SETTINGS PANEL */}
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel
+          onClose={(mic, headset) => {
+            setMicDeviceId(mic)
+            setHeadsetDeviceId(headset)
+            setShowSettings(false)
+          }}
+        />
       )}
-
     </div>
   )
 }

@@ -6,7 +6,7 @@ interface AudioDevice {
 }
 
 interface SettingsPanelProps {
-  onClose: () => void
+  onClose: (micDeviceId: string | null, headsetDeviceId: string | null) => void
 }
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
@@ -18,29 +18,29 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
 
-  // Charger les périphériques audio
   useEffect(() => {
     async function loadDevices() {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true })
           .then(s => s.getTracks().forEach(t => t.stop()))
-        
+
         const devices = await navigator.mediaDevices.enumerateDevices()
-        
+
         setInputs(devices
           .filter(d => d.kind === 'audioinput')
-          .map(d => ({
-            deviceId: d.deviceId,
-            label: d.label || 'Micro inconnu',
-          }))
+          .map(d => ({ deviceId: d.deviceId, label: d.label || 'Micro inconnu' }))
         )
         setOutputs(devices
           .filter(d => d.kind === 'audiooutput')
-          .map(d => ({
-            deviceId: d.deviceId,
-            label: d.label || 'Sortie inconnue',
-          }))
+          .map(d => ({ deviceId: d.deviceId, label: d.label || 'Sortie inconnue' }))
         )
+
+        // Restaurer les choix sauvegardés
+        const savedMic = await window.electron.settings.get('micDeviceId') as string
+        const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
+        if (savedMic) setSelectedMic(savedMic)
+        if (savedHeadset) setSelectedHeadset(savedHeadset)
+
       } catch (err) {
         console.error('Erreur accès périphériques:', err)
       }
@@ -48,27 +48,21 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     loadDevices()
   }, [])
 
-  // Test du micro — affiche le volume en temps réel
   async function testMic() {
     setTesting(true)
     setTestResult(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedMic
-          ? { deviceId: { exact: selectedMic } }
-          : true,
+        audio: selectedMic ? { deviceId: { exact: selectedMic } } : true,
       })
-
       const audioCtx = new AudioContext()
       const analyser = audioCtx.createAnalyser()
       const source = audioCtx.createMediaStreamSource(stream)
       source.connect(analyser)
       analyser.fftSize = 256
       const data = new Uint8Array(analyser.frequencyBinCount)
-
       let frames = 0
       let maxVol = 0
-
       const check = () => {
         analyser.getByteFrequencyData(data)
         const vol = data.reduce((a, b) => a + b, 0) / data.length
@@ -81,7 +75,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           audioCtx.close()
           setTesting(false)
           setMicVolume(0)
-          setTestResult(maxVol > 5 ? '✅ Micro détecté et fonctionnel !' : '⚠️ Aucun son détecté — vérifie ton micro.')
+          setTestResult(maxVol > 5
+            ? '✅ Micro détecté et fonctionnel !'
+            : '⚠️ Aucun son détecté — vérifie ton micro.')
         }
       }
       requestAnimationFrame(check)
@@ -91,6 +87,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
   }
 
+  const handleClose = () => {
+    // Sauvegarder dans electron-store
+    if (selectedMic) {
+      window.electron.settings.set('micDeviceId', selectedMic)
+    }
+    if (selectedHeadset) {
+      window.electron.settings.set('headsetDeviceId', selectedHeadset)
+    }
+    onClose(selectedMic || null, selectedHeadset || null)
+  }
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 100,
@@ -98,7 +105,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       display: 'flex', alignItems: 'center',
       justifyContent: 'center',
     }}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         onClick={e => e.stopPropagation()}
@@ -109,7 +116,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           width: '100%', maxWidth: '480px',
         }}>
 
-        {/* HEADER */}
         <div style={{
           display: 'flex', justifyContent: 'space-between',
           alignItems: 'center', marginBottom: '24px',
@@ -120,15 +126,13 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             letterSpacing: '0.1em',
           }}>⚙️ PARAMÈTRES AUDIO</div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               background: 'transparent', border: 'none',
-              color: '#475569', cursor: 'pointer',
-              fontSize: '20px',
+              color: '#475569', cursor: 'pointer', fontSize: '20px',
             }}>✕</button>
         </div>
 
-        {/* MICRO */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{
             color: '#06b6d4', fontSize: '11px',
@@ -147,42 +151,32 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             }}>
             <option value="">Micro par défaut</option>
             {inputs.map(d => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label}
-              </option>
+              <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
             ))}
           </select>
 
-          {/* BARRE DE VOLUME */}
           <div style={{
             height: '6px', background: '#1e2d45',
             borderRadius: '99px', overflow: 'hidden',
             marginBottom: '10px',
           }}>
             <div style={{
-              height: '100%',
-              width: `${micVolume}%`,
-              background: micVolume > 70
-                ? '#22c55e' : micVolume > 30
-                ? '#06b6d4' : '#475569',
-              borderRadius: '99px',
-              transition: 'width 0.1s',
+              height: '100%', width: `${micVolume}%`,
+              background: micVolume > 70 ? '#22c55e' : micVolume > 30 ? '#06b6d4' : '#475569',
+              borderRadius: '99px', transition: 'width 0.1s',
             }}/>
           </div>
 
-          {/* BOUTON TEST */}
           <button
             onClick={testMic}
             disabled={testing}
             style={{
-              background: testing
-                ? 'rgba(6,182,212,0.1)' : 'transparent',
+              background: testing ? 'rgba(6,182,212,0.1)' : 'transparent',
               border: '1px solid #1e2d45',
               color: testing ? '#06b6d4' : '#94a3b8',
               padding: '8px 16px', borderRadius: '8px',
               cursor: testing ? 'not-allowed' : 'pointer',
-              fontSize: '12px',
-              fontFamily: 'Orbitron, sans-serif',
+              fontSize: '12px', fontFamily: 'Orbitron, sans-serif',
             }}>
             {testing ? '🎤 Test en cours...' : '🎤 Tester le micro'}
           </button>
@@ -195,7 +189,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           )}
         </div>
 
-        {/* CASQUE */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{
             color: '#06b6d4', fontSize: '11px',
@@ -213,16 +206,13 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             }}>
             <option value="">Sortie par défaut</option>
             {outputs.map(d => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label}
-              </option>
+              <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
             ))}
           </select>
         </div>
 
-        {/* BOUTON SAUVEGARDER */}
         <button
-          onClick={onClose}
+          onClick={handleClose}
           style={{
             width: '100%',
             background: 'linear-gradient(to right, #3b82f6, #06b6d4)',

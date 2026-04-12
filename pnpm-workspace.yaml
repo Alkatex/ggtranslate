@@ -3,5 +3,8 @@ packages:
   - 'packages/*'
   - 'backend'
 allowBuilds:
+  bufferutil: true
   electron: true
+  es5-ext: true
   esbuild: true
+  utf-8-validate: true
