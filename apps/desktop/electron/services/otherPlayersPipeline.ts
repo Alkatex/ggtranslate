@@ -38,7 +38,7 @@ export async function startOtherPlayersPipeline(
     smart_format: true,
     model: 'nova-2',
     encoding: 'linear16',
-    sample_rate: 16000,
+    sample_rate: 48000,
     channels: 1,
     endpointing: 500,
     utterance_end_ms: 1500,

@@ -9,10 +9,6 @@
 #include <atomic>
 #include <functional>
 
-// Application Loopback Capture
-// Capture audio par process avec exclusion du process TTS
-// Basé sur Windows Application Loopback Audio Capture (Microsoft sample)
-
 #define REFTIMES_PER_SEC 10000000
 #define REFTIMES_PER_MILLISEC 10000
 
@@ -55,7 +51,6 @@ public:
         );
         if (FAILED(hr)) { CoUninitialize(); return; }
 
-        // Utilise le device de rendu par défaut pour loopback
         hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
         if (FAILED(hr)) { pEnumerator->Release(); CoUninitialize(); return; }
 
@@ -66,16 +61,6 @@ public:
         hr = pAudioClient->GetMixFormat(&pwfx);
         if (FAILED(hr)) { pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; }
 
-        // Format linear16 16kHz mono pour Deepgram
-        WAVEFORMATEX wfx = {};
-        wfx.wFormatTag = WAVE_FORMAT_PCM;
-        wfx.nChannels = 1;
-        wfx.nSamplesPerSec = 16000;
-        wfx.wBitsPerSample = 16;
-        wfx.nBlockAlign = wfx.nChannels * wfx.wBitsPerSample / 8;
-        wfx.nAvgBytesPerSec = wfx.nSamplesPerSec * wfx.nBlockAlign;
-
-        // AUDCLNT_STREAMFLAGS_LOOPBACK — capture ce qui sort sur le device
         hr = pAudioClient->Initialize(
             AUDCLNT_SHAREMODE_SHARED,
             AUDCLNT_STREAMFLAGS_LOOPBACK,
@@ -130,18 +115,22 @@ public:
                 if (FAILED(hr)) break;
 
                 if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && pData != nullptr) {
-                    // Convertir en linear16 et envoyer au main process
-                    std::vector<int16_t> pcm16(numFramesAvailable);
+                    // Stéréo float32 → mono int16
                     float* floatData = reinterpret_cast<float*>(pData);
+                    std::vector<int16_t> pcm16(numFramesAvailable);
 
                     for (UINT32 i = 0; i < numFramesAvailable; i++) {
-                        float sample = floatData[i];
-                        if (sample > 1.0f) sample = 1.0f;
-                        if (sample < -1.0f) sample = -1.0f;
-                        pcm16[i] = static_cast<int16_t>(sample * 32767);
+                        // Moyenne des 2 canaux stéréo pour avoir du mono
+                        float left  = floatData[i * 2];
+                        float right = floatData[i * 2 + 1];
+                        float mono  = (left + right) / 2.0f;
+
+                        if (mono > 1.0f) mono = 1.0f;
+                        if (mono < -1.0f) mono = -1.0f;
+
+                        pcm16[i] = static_cast<int16_t>(mono * 32767);
                     }
 
-                    // Envoyer le chunk au renderer via ThreadSafeFunction
                     std::vector<int16_t>* heapData = new std::vector<int16_t>(pcm16);
                     tsfn.NonBlockingCall(heapData, [](Napi::Env env, Napi::Function jsCallback, std::vector<int16_t>* data) {
                         auto buffer = Napi::Buffer<int16_t>::Copy(env, data->data(), data->size());
