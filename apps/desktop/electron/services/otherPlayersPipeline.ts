@@ -1,6 +1,7 @@
-import { BrowserWindow } from 'electron'
+// @ts-ignore
 import { startOtherPlayersCapture, stopOtherPlayersCapture } from './otherPlayersCaptureService'
 import { Deepgram } from '@deepgram/sdk'
+import { BrowserWindow } from 'electron'
 
 interface OtherPlayersPipelineConfig {
   win: BrowserWindow
@@ -40,8 +41,8 @@ export async function startOtherPlayersPipeline(
     encoding: 'linear16',
     sample_rate: 48000,
     channels: 1,
-    endpointing: 500,
-    utterance_end_ms: 1500,
+    endpointing: 300,
+    utterance_end_ms: 1000,
     vad_events: true,
   })
 
@@ -67,7 +68,7 @@ export async function startOtherPlayersPipeline(
       if (data.type === 'Results') {
         const transcript = data?.channel?.alternatives?.[0]?.transcript
         if (transcript && transcript.trim()) {
-          console.log('📝 Other Players transcript:', transcript)
+          console.log('📝 Other Players transcript:', transcript, '| Final:', data.is_final)
           config.win.webContents.send('other-players:transcript', {
             text: transcript,
             isFinal: data.is_final,

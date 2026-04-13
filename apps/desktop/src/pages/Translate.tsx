@@ -16,41 +16,65 @@ const LANGUAGES = [
 
 const EFFECTS = ['Normal', 'Robot', 'Deep', 'Chipmunk', 'Alien', 'Ghost']
 
+interface FeedItem {
+  id: number
+  original: string
+  translated: string
+  timestamp: string
+}
+
+let feedCounter = 0
+
 export function TranslatePage() {
   const [sourceLang, setSourceLang] = useState('fr')
   const [targetLang, setTargetLang] = useState('en')
   const [liveState, setLiveState] = useState<PipelineState>('inactive')
   const [activeEffect, setActiveEffect] = useState('normal')
   const [showSettings, setShowSettings] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const [translated, setTranslated] = useState('')
-  const [errorMsg, setErrorMsg] = useState('')
   const [micDeviceId, setMicDeviceId] = useState<string | null>(null)
   const [headsetDeviceId, setHeadsetDeviceId] = useState<string | null>(null)
+
+  const [currentTranscript, setCurrentTranscript] = useState('')
+  const [myFeed, setMyFeed] = useState<FeedItem[]>([])
+  const [errorMsg, setErrorMsg] = useState('')
+
   const [otherPlayersState, setOtherPlayersState] = useState<OtherPlayersState>('inactive')
-  const [otherTranscript, setOtherTranscript] = useState('')
-  const [otherTranslated, setOtherTranslated] = useState('')
+  const [currentOtherTranscript, setCurrentOtherTranscript] = useState('')
+  const [otherFeed, setOtherFeed] = useState<FeedItem[]>([])
   const [otherError, setOtherError] = useState('')
 
   const pipelineRef = useRef<TranslationPipeline | null>(null)
+  const myFeedRef = useRef<HTMLDivElement>(null)
+  const otherFeedRef = useRef<HTMLDivElement>(null)
+  const currentTranscriptRef = useRef('')
+  const currentOtherTranscriptRef = useRef('')
 
   useEffect(() => {
     pipelineRef.current = new TranslationPipeline()
-
     async function loadSavedDevices() {
       const savedMic = await window.electron.settings.get('micDeviceId') as string
       const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
       if (savedMic) setMicDeviceId(savedMic)
       if (savedHeadset) setHeadsetDeviceId(savedHeadset)
     }
-
     loadSavedDevices()
-
     return () => {
       pipelineRef.current?.stop()
       stopOtherPlayers()
     }
   }, [])
+
+  useEffect(() => {
+    if (myFeedRef.current) {
+      myFeedRef.current.scrollTop = myFeedRef.current.scrollHeight
+    }
+  }, [myFeed])
+
+  useEffect(() => {
+    if (otherFeedRef.current) {
+      otherFeedRef.current.scrollTop = otherFeedRef.current.scrollHeight
+    }
+  }, [otherFeed])
 
   const swapLanguages = () => {
     setSourceLang(targetLang)
@@ -59,17 +83,30 @@ export function TranslatePage() {
 
   const toggleLive = async () => {
     if (liveState === 'inactive') {
-      setTranscript('')
-      setTranslated('')
+      setCurrentTranscript('')
+      currentTranscriptRef.current = ''
       setErrorMsg('')
+
       await pipelineRef.current?.start({
         micDeviceId,
         headsetDeviceId,
         sourceLang,
         targetLang,
         onStateChange: (state) => setLiveState(state),
-        onTranscript: (text, _isFinal) => setTranscript(text),
-        onTranslated: (text) => setTranslated(text),
+        onTranscript: (text, _isFinal) => {
+          setCurrentTranscript(text)
+          currentTranscriptRef.current = text
+        },
+        onTranslated: (text) => {
+          setMyFeed(prev => [...prev, {
+            id: ++feedCounter,
+            original: currentTranscriptRef.current,
+            translated: text,
+            timestamp: new Date().toLocaleTimeString(),
+          }])
+          setCurrentTranscript('')
+          currentTranscriptRef.current = ''
+        },
         onError: (error) => {
           setErrorMsg(error)
           setLiveState('error')
@@ -78,21 +115,36 @@ export function TranslatePage() {
     } else {
       pipelineRef.current?.stop()
       setLiveState('inactive')
+      setCurrentTranscript('')
+      currentTranscriptRef.current = ''
     }
   }
 
   const toggleOtherPlayers = async () => {
     if (otherPlayersState === 'inactive') {
-      setOtherTranscript('')
-      setOtherTranslated('')
+      setCurrentOtherTranscript('')
+      currentOtherTranscriptRef.current = ''
       setOtherError('')
+
       await startOtherPlayers({
         headsetDeviceId,
         sourceLang: targetLang,
         targetLang: sourceLang,
         onStateChange: setOtherPlayersState,
-        onTranscript: (text, _isFinal) => setOtherTranscript(text),
-        onTranslated: (text) => setOtherTranslated(text),
+        onTranscript: (text, _isFinal) => {
+          setCurrentOtherTranscript(text)
+          currentOtherTranscriptRef.current = text
+        },
+        onTranslated: (text) => {
+          setOtherFeed(prev => [...prev, {
+            id: ++feedCounter,
+            original: currentOtherTranscriptRef.current,
+            translated: text,
+            timestamp: new Date().toLocaleTimeString(),
+          }])
+          setCurrentOtherTranscript('')
+          currentOtherTranscriptRef.current = ''
+        },
         onError: (error) => {
           setOtherError(error)
           setOtherPlayersState('error')
@@ -101,6 +153,8 @@ export function TranslatePage() {
     } else {
       stopOtherPlayers()
       setOtherPlayersState('inactive')
+      setCurrentOtherTranscript('')
+      currentOtherTranscriptRef.current = ''
     }
   }
 
@@ -244,14 +298,12 @@ export function TranslatePage() {
           </select>
         </div>
 
-        <button
-          onClick={swapLanguages}
-          style={{
-            marginTop: '24px', background: '#0d1424',
-            border: '1px solid #1e2d45', color: '#94a3b8',
-            width: '40px', height: '40px', borderRadius: '50%',
-            cursor: 'pointer', fontSize: '16px',
-          }}>⇄</button>
+        <button onClick={swapLanguages} style={{
+          marginTop: '24px', background: '#0d1424',
+          border: '1px solid #1e2d45', color: '#94a3b8',
+          width: '40px', height: '40px', borderRadius: '50%',
+          cursor: 'pointer', fontSize: '16px',
+        }}>⇄</button>
 
         <div style={{ flex: 1 }}>
           <div style={{
@@ -277,7 +329,7 @@ export function TranslatePage() {
         </div>
       </div>
 
-      {/* MA VOIX + EFFETS */}
+      {/* MA VOIX */}
       <div style={{
         background: '#0d1424', border: '1px solid #1e2d45',
         borderRadius: '12px', padding: '20px',
@@ -303,20 +355,18 @@ export function TranslatePage() {
           <div style={{
             color: liveColors[liveState], fontSize: '11px',
             fontFamily: 'Orbitron, sans-serif',
-            letterSpacing: '0.08em',
           }}>
-            {liveState === 'inactive'
-              ? '● APPUIE POUR DÉMARRER'
-              : liveLabels[liveState]}
+            {liveState === 'inactive' ? '● APPUIE POUR DÉMARRER' : liveLabels[liveState]}
           </div>
         </div>
 
+        {/* LIVE BUTTON */}
         <div style={{
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', gap: '16px',
           padding: '20px 0',
           borderBottom: '1px solid #1e2d45',
-          marginBottom: '20px',
+          marginBottom: '16px',
         }}>
           <button
             onClick={toggleLive}
@@ -344,34 +394,55 @@ export function TranslatePage() {
           <div style={{
             color: liveColors[liveState], fontSize: '11px',
             fontFamily: 'Orbitron, sans-serif',
-            letterSpacing: '0.1em',
           }}>{liveLabels[liveState]}</div>
 
-          <div style={{
-            width: '100%', minHeight: '60px',
-            background: '#111827', borderRadius: '8px',
-            padding: '12px 16px', fontSize: '14px',
-            color: '#94a3b8', lineHeight: 1.6,
+          {currentTranscript && (
+            <div style={{
+              width: '100%', padding: '8px 16px',
+              background: 'rgba(6,182,212,0.05)',
+              borderRadius: '8px', fontSize: '13px',
+              color: '#06b6d4', fontStyle: 'italic',
+              border: '1px solid rgba(6,182,212,0.15)',
+            }}>
+              {currentTranscript}
+            </div>
+          )}
+
+          {errorMsg && (
+            <div style={{ color: '#ef4444', fontSize: '12px' }}>{errorMsg}</div>
+          )}
+        </div>
+
+        {/* FEED MA VOIX */}
+        <div
+          ref={myFeedRef}
+          style={{
+            maxHeight: '200px', overflowY: 'auto',
+            display: 'flex', flexDirection: 'column', gap: '8px',
+            marginBottom: '16px',
           }}>
-            {liveState === 'inactive' && !transcript && (
-              <span style={{ color: '#475569' }}>— — — — — — — — —</span>
-            )}
-            {transcript && (
-              <div>
-                <span style={{ color: '#fff' }}>{transcript}</span>
-                {translated && (
-                  <div style={{
-                    marginTop: '8px', paddingTop: '8px',
-                    borderTop: '1px solid #1e2d45',
-                    color: '#06b6d4', fontSize: '14px',
-                  }}>→ {translated}</div>
-                )}
+          {myFeed.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '16px' }}>
+              Les traductions apparaîtront ici
+            </div>
+          ) : (
+            myFeed.map(item => (
+              <div key={item.id} style={{
+                background: '#111827', borderRadius: '8px',
+                padding: '10px 14px', border: '1px solid #1e2d45',
+              }}>
+                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
+                  {item.original}
+                </div>
+                <div style={{ color: '#06b6d4', fontSize: '13px', marginBottom: '4px' }}>
+                  → {item.translated}
+                </div>
+                <div style={{ color: '#475569', fontSize: '10px' }}>
+                  {item.timestamp}
+                </div>
               </div>
-            )}
-            {errorMsg && (
-              <span style={{ color: '#ef4444' }}>{errorMsg}</span>
-            )}
-          </div>
+            ))
+          )}
         </div>
 
         {/* EFFETS DE VOIX */}
@@ -449,45 +520,63 @@ export function TranslatePage() {
               ? 'rgba(168,85,247,0.15)' : 'transparent',
             border: `1px solid ${otherPlayersState !== 'inactive' ? '#a855f7' : '#1e2d45'}`,
             color: otherPlayersState !== 'inactive' ? '#a855f7' : '#94a3b8',
-            padding: '8px 16px',
-            borderRadius: '8px', cursor: 'pointer',
-            fontSize: '12px', display: 'flex',
-            alignItems: 'center', gap: '8px',
+            padding: '8px 16px', borderRadius: '8px',
+            cursor: 'pointer', fontSize: '12px',
+            display: 'flex', alignItems: 'center', gap: '8px',
             fontFamily: 'Orbitron, sans-serif',
-            marginBottom: '12px',
-            transition: 'all 0.2s',
+            marginBottom: '12px', transition: 'all 0.2s',
           }}>
           {otherPlayersState !== 'inactive' ? '⏹ ARRÊTER' : '🖥️ CAPTURER'}
         </button>
 
-        <div style={{
-          padding: '12px', background: '#111827',
-          borderRadius: '8px', fontSize: '13px',
-          color: '#94a3b8', lineHeight: 1.6,
-          border: '1px solid #1e2d45',
-          minHeight: '60px',
-        }}>
-          {otherPlayersState === 'inactive' && !otherTranscript && (
-            <span style={{ color: '#475569', fontSize: '12px' }}>
-              Clique "Capturer" pour traduire les autres joueurs en temps réel.
-            </span>
-          )}
-          {otherTranscript && (
-            <div>
-              <span style={{ color: '#fff' }}>{otherTranscript}</span>
-              {otherTranslated && (
-                <div style={{
-                  marginTop: '8px', paddingTop: '8px',
-                  borderTop: '1px solid #1e2d45',
-                  color: '#a855f7', fontSize: '13px',
-                }}>→ {otherTranslated}</div>
-              )}
+        {currentOtherTranscript && (
+          <div style={{
+            padding: '8px 16px', marginBottom: '8px',
+            background: 'rgba(168,85,247,0.05)',
+            borderRadius: '8px', fontSize: '13px',
+            color: '#a855f7', fontStyle: 'italic',
+            border: '1px solid rgba(168,85,247,0.15)',
+          }}>
+            {currentOtherTranscript}
+          </div>
+        )}
+
+        {/* FEED AUTRES JOUEURS */}
+        <div
+          ref={otherFeedRef}
+          style={{
+            maxHeight: '200px', overflowY: 'auto',
+            display: 'flex', flexDirection: 'column', gap: '8px',
+          }}>
+          {otherFeed.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '16px' }}>
+              {otherPlayersState === 'inactive'
+                ? 'Clique "Capturer" pour traduire les autres joueurs'
+                : 'En attente de voix...'}
             </div>
-          )}
-          {otherError && (
-            <span style={{ color: '#ef4444', fontSize: '12px' }}>{otherError}</span>
+          ) : (
+            otherFeed.map(item => (
+              <div key={item.id} style={{
+                background: '#111827', borderRadius: '8px',
+                padding: '10px 14px', border: '1px solid #1e2d45',
+              }}>
+                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
+                  {item.original}
+                </div>
+                <div style={{ color: '#a855f7', fontSize: '13px', marginBottom: '4px' }}>
+                  → {item.translated}
+                </div>
+                <div style={{ color: '#475569', fontSize: '10px' }}>
+                  {item.timestamp}
+                </div>
+              </div>
+            ))
           )}
         </div>
+
+        {otherError && (
+          <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px' }}>{otherError}</div>
+        )}
       </div>
 
       {/* PHRASES RAPIDES */}

@@ -88,8 +88,6 @@ export async function startSTTSession(
 export function sendAudioChunk(chunk: Buffer): void {
   if (currentSession?.isActive && currentSession.connection) {
     currentSession.connection.send(chunk)
-  } else {
-    console.log('⚠️ Chunk ignoré — session inactive')
   }
 }
 
