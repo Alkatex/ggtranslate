@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { TranslationPipeline, PipelineState } from '../lib/pipeline'
 import { startOtherPlayers, stopOtherPlayers, OtherPlayersState } from '../lib/otherPlayersPipeline'
+import { useAuthStore } from '../store/auth'
 
 const LANGUAGES = [
   { code: 'fr', flag: '🇫🇷', name: 'Français' },
@@ -26,6 +27,8 @@ interface FeedItem {
 let feedCounter = 0
 
 export function TranslatePage() {
+  const { plan, secondsRemaining, canUseFeature, signOut } = useAuthStore()
+
   const [sourceLang, setSourceLang] = useState('fr')
   const [targetLang, setTargetLang] = useState('en')
   const [liveState, setLiveState] = useState<PipelineState>('inactive')
@@ -86,7 +89,6 @@ export function TranslatePage() {
       setCurrentTranscript('')
       currentTranscriptRef.current = ''
       setErrorMsg('')
-
       await pipelineRef.current?.start({
         micDeviceId,
         headsetDeviceId,
@@ -121,11 +123,14 @@ export function TranslatePage() {
   }
 
   const toggleOtherPlayers = async () => {
+    if (!canUseFeature('otherPlayers')) {
+      setOtherError('⬆️ Upgrade vers Starter pour traduire les autres joueurs')
+      return
+    }
     if (otherPlayersState === 'inactive') {
       setCurrentOtherTranscript('')
       currentOtherTranscriptRef.current = ''
       setOtherError('')
-
       await startOtherPlayers({
         headsetDeviceId,
         sourceLang: targetLang,
@@ -190,6 +195,16 @@ export function TranslatePage() {
 
   const isLocked = liveState === 'processing'
 
+  const planColor = plan === 'pro' ? '#a855f7'
+    : plan === 'starter' ? '#3b82f6'
+    : plan === 'trial' ? '#06b6d4'
+    : '#64748b'
+
+  const planLabel = plan === 'pro' ? '⚡ PRO'
+    : plan === 'starter' ? '🚀 STARTER'
+    : plan === 'trial' ? '⭐ TRIAL'
+    : '🆓 FREE'
+
   return (
     <div style={{
       position: 'relative', zIndex: 1,
@@ -251,23 +266,52 @@ export function TranslatePage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{
-            background: 'rgba(6,182,212,0.15)',
-            color: '#06b6d4', padding: '4px 12px',
+            background: `${planColor}22`,
+            color: planColor,
+            padding: '4px 12px',
             borderRadius: '99px', fontSize: '11px',
             fontFamily: 'Orbitron, sans-serif',
-            border: '1px solid rgba(6,182,212,0.3)',
-          }}>⭐ FREE TRIAL</span>
-          <div style={{ color: '#94a3b8', fontSize: '12px' }}>
-            <span style={{ color: '#fff', fontWeight: 600 }}>30</span> min restantes
-          </div>
-          <div style={{ color: '#94a3b8', fontSize: '12px' }}>
-            <span style={{ color: '#fff', fontWeight: 600 }}>3</span> langues
-          </div>
+            border: `1px solid ${planColor}44`,
+          }}>
+            {planLabel}
+          </span>
+
+          {secondsRemaining < 999999 && (
+            <div style={{
+              color: secondsRemaining < 120 ? '#ef4444' : '#94a3b8',
+              fontSize: '12px',
+              fontWeight: secondsRemaining < 120 ? 700 : 400,
+            }}>
+              <span style={{
+                color: secondsRemaining < 120 ? '#ef4444' : '#fff',
+                fontWeight: 600,
+              }}>
+                {Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}
+              </span> restantes
+            </div>
+          )}
+
+          {plan === 'pro' && (
+            <div style={{ color: '#a855f7', fontSize: '12px' }}>
+              ∞ Illimité
+            </div>
+          )}
         </div>
-        <button style={{
-          background: 'transparent', border: 'none',
-          color: '#06b6d4', cursor: 'pointer', fontSize: '12px',
-        }}>Upgrade →</button>
+
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {(plan === 'free' || plan === 'trial') && (
+            <button style={{
+              background: 'transparent', border: 'none',
+              color: '#06b6d4', cursor: 'pointer', fontSize: '12px',
+            }}>Upgrade →</button>
+          )}
+          <button
+            onClick={signOut}
+            style={{
+              background: 'transparent', border: 'none',
+              color: '#475569', cursor: 'pointer', fontSize: '12px',
+            }}>Déconnexion</button>
+        </div>
       </div>
 
       {/* LANGUAGE SELECTOR */}
@@ -360,7 +404,6 @@ export function TranslatePage() {
           </div>
         </div>
 
-        {/* LIVE BUTTON */}
         <div style={{
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', gap: '16px',
@@ -456,25 +499,29 @@ export function TranslatePage() {
               fontSize: '11px', color: '#06b6d4',
               letterSpacing: '0.1em',
             }}>🎛️ EFFETS DE VOIX</div>
-            <span style={{ color: '#475569', fontSize: '11px', cursor: 'pointer' }}>
-              🔒 Unlock Starter
-            </span>
+            {!canUseFeature('voiceEffects') && (
+              <span style={{ color: '#475569', fontSize: '11px', cursor: 'pointer' }}>
+                🔒 Unlock Starter
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {EFFECTS.map(effect => (
               <button
                 key={effect}
-                onClick={() => setActiveEffect(effect.toLowerCase())}
+                onClick={() => canUseFeature('voiceEffects') && setActiveEffect(effect.toLowerCase())}
                 style={{
                   background: activeEffect === effect.toLowerCase()
                     ? 'rgba(6,182,212,0.15)' : 'transparent',
                   border: `1px solid ${activeEffect === effect.toLowerCase()
                     ? '#06b6d4' : '#1e2d45'}`,
                   color: activeEffect === effect.toLowerCase()
-                    ? '#06b6d4' : '#94a3b8',
+                    ? '#06b6d4'
+                    : canUseFeature('voiceEffects') ? '#94a3b8' : '#334155',
                   padding: '6px 14px', borderRadius: '8px',
-                  cursor: 'pointer', fontSize: '12px',
-                  transition: 'all 0.2s',
+                  cursor: canUseFeature('voiceEffects') ? 'pointer' : 'not-allowed',
+                  fontSize: '12px', transition: 'all 0.2s',
+                  opacity: canUseFeature('voiceEffects') ? 1 : 0.5,
                 }}>{effect}</button>
             ))}
           </div>
@@ -500,7 +547,9 @@ export function TranslatePage() {
                 letterSpacing: '0.1em',
               }}>AUTRES JOUEURS</div>
               <div style={{ color: '#475569', fontSize: '11px' }}>
-                Capture audio système native Windows
+                {canUseFeature('otherPlayers')
+                  ? 'Capture audio système native Windows'
+                  : '🔒 Disponible en Starter et Pro'}
               </div>
             </div>
           </div>
@@ -519,14 +568,18 @@ export function TranslatePage() {
             background: otherPlayersState !== 'inactive'
               ? 'rgba(168,85,247,0.15)' : 'transparent',
             border: `1px solid ${otherPlayersState !== 'inactive' ? '#a855f7' : '#1e2d45'}`,
-            color: otherPlayersState !== 'inactive' ? '#a855f7' : '#94a3b8',
+            color: otherPlayersState !== 'inactive' ? '#a855f7'
+              : canUseFeature('otherPlayers') ? '#94a3b8' : '#334155',
             padding: '8px 16px', borderRadius: '8px',
             cursor: 'pointer', fontSize: '12px',
             display: 'flex', alignItems: 'center', gap: '8px',
             fontFamily: 'Orbitron, sans-serif',
             marginBottom: '12px', transition: 'all 0.2s',
+            opacity: canUseFeature('otherPlayers') ? 1 : 0.6,
           }}>
-          {otherPlayersState !== 'inactive' ? '⏹ ARRÊTER' : '🖥️ CAPTURER'}
+          {otherPlayersState !== 'inactive' ? '⏹ ARRÊTER'
+            : canUseFeature('otherPlayers') ? '🖥️ CAPTURER'
+            : '🔒 UPGRADE REQUIS'}
         </button>
 
         {currentOtherTranscript && (
@@ -541,7 +594,6 @@ export function TranslatePage() {
           </div>
         )}
 
-        {/* FEED AUTRES JOUEURS */}
         <div
           ref={otherFeedRef}
           style={{
@@ -550,9 +602,11 @@ export function TranslatePage() {
           }}>
           {otherFeed.length === 0 ? (
             <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '16px' }}>
-              {otherPlayersState === 'inactive'
-                ? 'Clique "Capturer" pour traduire les autres joueurs'
-                : 'En attente de voix...'}
+              {canUseFeature('otherPlayers')
+                ? otherPlayersState === 'inactive'
+                  ? 'Clique "Capturer" pour traduire les autres joueurs'
+                  : 'En attente de voix...'
+                : '⬆️ Upgrade vers Starter pour débloquer cette feature'}
             </div>
           ) : (
             otherFeed.map(item => (

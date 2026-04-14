@@ -11,7 +11,6 @@ interface AuthState {
   isLoading: boolean
   isAuthenticated: boolean
 
-  // Actions
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
@@ -19,6 +18,8 @@ interface AuthState {
   loadProfile: () => Promise<void>
   consumeSeconds: (seconds: number) => Promise<void>
   refreshSession: () => Promise<void>
+  canUseFeature: (feature: 'otherPlayers' | 'voiceEffects' | 'voiceCloning') => boolean
+  canUseLanguage: (langCode: string) => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -70,14 +71,12 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get()
         if (!user) return
 
-        // Charger le profil
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single()
 
-        // Charger la subscription
         const { data: subscription } = await supabase
           .from('subscriptions')
           .select('*')
@@ -85,13 +84,11 @@ export const useAuthStore = create<AuthState>()(
           .eq('status', 'active')
           .single()
 
-        // Déterminer le plan
         let plan: Plan = 'free'
         if (subscription?.plan === 'pro') plan = 'pro'
         else if (subscription?.plan === 'starter') plan = 'starter'
         else if (profile && !profile.trial_used) plan = 'trial'
 
-        // Calculer les secondes restantes aujourd'hui
         const limits = PLAN_LIMITS[plan]
         const secondsUsed = profile?.minutes_used_today ? profile.minutes_used_today * 60 : 0
         const secondsRemaining = limits.secondsPerDay === -1
@@ -108,7 +105,6 @@ export const useAuthStore = create<AuthState>()(
         const newRemaining = Math.max(0, secondsRemaining - seconds)
         set({ secondsRemaining: newRemaining })
 
-        // Mettre à jour dans Supabase
         const newMinutesUsed = profile.minutes_used_today + Math.ceil(seconds / 60)
         await supabase
           .from('profiles')
@@ -124,6 +120,23 @@ export const useAuthStore = create<AuthState>()(
         } else {
           set({ user: null, isAuthenticated: false })
         }
+      },
+
+      canUseFeature: (feature) => {
+        const { plan } = get()
+        const limits = PLAN_LIMITS[plan]
+        if (feature === 'otherPlayers') return limits.otherPlayers
+        if (feature === 'voiceCloning') return limits.voiceCloning
+        if (feature === 'voiceEffects') return limits.voiceEffects > 0
+        return false
+      },
+
+      canUseLanguage: (langCode) => {
+        const { plan } = get()
+        const limits = PLAN_LIMITS[plan]
+        if (limits.languages === -1) return true
+        const freeLangs = ['fr', 'en']
+        return freeLangs.includes(langCode)
       },
     }),
     {
