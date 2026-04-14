@@ -29,7 +29,7 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       subscription: null,
       plan: 'free',
-      secondsRemaining: 0,
+      secondsRemaining: -1,
       isLoading: false,
       isAuthenticated: false,
 
@@ -63,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null, profile: null,
           subscription: null, plan: 'free',
-          secondsRemaining: 0, isAuthenticated: false,
+          secondsRemaining: -1, isAuthenticated: false,
         })
       },
 
@@ -89,18 +89,23 @@ export const useAuthStore = create<AuthState>()(
         else if (subscription?.plan === 'starter') plan = 'starter'
         else if (profile && !profile.trial_used) plan = 'trial'
 
-        const limits = PLAN_LIMITS[plan]
-        const secondsUsed = profile?.minutes_used_today ? profile.minutes_used_today * 60 : 0
-        const secondsRemaining = limits.secondsPerDay === -1
-          ? 999999
-          : Math.max(0, limits.secondsPerDay - secondsUsed)
+        // -1 = illimité (pro), sinon calcul normal
+        let secondsRemaining: number
+        if (plan === 'pro') {
+          secondsRemaining = -1
+        } else {
+          const limits = PLAN_LIMITS[plan]
+          const secondsUsed = profile?.minutes_used_today ? profile.minutes_used_today * 60 : 0
+          secondsRemaining = Math.max(0, limits.secondsPerDay - secondsUsed)
+        }
 
         set({ profile, subscription, plan, secondsRemaining })
       },
 
       consumeSeconds: async (seconds: number) => {
-        const { user, profile, secondsRemaining } = get()
+        const { user, profile, secondsRemaining, plan } = get()
         if (!user || !profile) return
+        if (plan === 'pro') return // Pro = illimité, pas de décompte
 
         const newRemaining = Math.max(0, secondsRemaining - seconds)
         set({ secondsRemaining: newRemaining })

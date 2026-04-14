@@ -79,6 +79,18 @@ export function TranslatePage() {
     }
   }, [otherFeed])
 
+  // Timer — décompte seulement si pas Pro
+  useEffect(() => {
+    if (plan === 'pro') return
+    if (liveState !== 'listening' && liveState !== 'processing') return
+
+    const interval = setInterval(() => {
+      useAuthStore.getState().consumeSeconds(1)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [liveState, plan])
+
   const swapLanguages = () => {
     setSourceLang(targetLang)
     setTargetLang(sourceLang)
@@ -276,7 +288,8 @@ export function TranslatePage() {
             {planLabel}
           </span>
 
-          {secondsRemaining < 999999 && (
+          {/* Timer — seulement si pas Pro */}
+          {plan !== 'pro' && secondsRemaining >= 0 && (
             <div style={{
               color: secondsRemaining < 120 ? '#ef4444' : '#94a3b8',
               fontSize: '12px',
@@ -291,6 +304,7 @@ export function TranslatePage() {
             </div>
           )}
 
+          {/* Illimité — seulement Pro */}
           {plan === 'pro' && (
             <div style={{ color: '#a855f7', fontSize: '12px' }}>
               ∞ Illimité
