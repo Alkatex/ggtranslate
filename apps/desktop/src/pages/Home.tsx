@@ -12,6 +12,13 @@ export function HomePage() {
   return (
     <div style={{ position: 'relative', zIndex: 1 }}>
 
+      <style>{`
+        @keyframes wave {
+          0%, 100% { transform: scaleY(1); }
+          50% { transform: scaleY(0.3); }
+        }
+      `}</style>
+
       {/* NAVBAR */}
       <nav style={{
         display: 'flex', alignItems: 'center',
@@ -36,7 +43,7 @@ export function HomePage() {
             }}>{item}</span>
           ))}
           <button
-            onClick={() => navigate('/translate')}
+            onClick={() => navigate('/login')}
             style={{
               background: 'linear-gradient(to right, #3b82f6, #06b6d4)',
               border: 'none', color: '#fff',
@@ -104,13 +111,18 @@ export function HomePage() {
               {[4,7,5,8,6,9,5,7,4].map((h, i) => (
                 <div key={i} style={{
                   width: '3px', height: `${h * 2}px`,
-                  background: '#06b6d4', borderRadius: '2px', opacity: 0.8,
+                  background: '#06b6d4', borderRadius: '2px',
+                  animation: `wave ${0.6 + i * 0.1}s ease-in-out infinite`,
+                  animationDelay: `${i * 0.08}s`,
+                  transformOrigin: 'center',
                 }}/>
               ))}
             </div>
           </div>
+
           <div style={{ color: '#f97316', fontSize: '20px' }}>⚡</div>
           <span style={{ color: '#94a3b8', fontSize: '11px' }}>&lt;1s</span>
+
           <div style={{
             background: 'rgba(6,182,212,0.1)',
             border: '1px solid rgba(6,182,212,0.3)',
@@ -123,7 +135,10 @@ export function HomePage() {
               {[5,8,6,9,7,5,8,6,4].map((h, i) => (
                 <div key={i} style={{
                   width: '3px', height: `${h * 2}px`,
-                  background: '#06b6d4', borderRadius: '2px', opacity: 0.8,
+                  background: '#06b6d4', borderRadius: '2px',
+                  animation: `wave ${0.5 + i * 0.12}s ease-in-out infinite`,
+                  animationDelay: `${i * 0.1 + 0.3}s`,
+                  transformOrigin: 'center',
                 }}/>
               ))}
             </div>
