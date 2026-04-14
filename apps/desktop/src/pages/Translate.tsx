@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { TranslationPipeline, PipelineState } from '../lib/pipeline'
 import { startOtherPlayers, stopOtherPlayers, OtherPlayersState } from '../lib/otherPlayersPipeline'
@@ -27,6 +28,7 @@ interface FeedItem {
 let feedCounter = 0
 
 export function TranslatePage() {
+  const navigate = useNavigate()
   const { plan, secondsRemaining, canUseFeature, signOut } = useAuthStore()
 
   const [sourceLang, setSourceLang] = useState('fr')
@@ -255,16 +257,26 @@ export function TranslatePage() {
               borderRadius: '8px', cursor: 'pointer',
               fontSize: '16px',
             }}>⚙️</button>
-          {['Groupes', 'Plans'].map(item => (
-            <button key={item} style={{
+          <button
+            onClick={() => navigate('/groups')}
+            style={{
               background: 'transparent',
               border: '1px solid #1e2d45',
               color: '#94a3b8', padding: '6px 14px',
               borderRadius: '8px', cursor: 'pointer',
               fontSize: '12px',
               fontFamily: 'Orbitron, sans-serif',
-            }}>{item}</button>
-          ))}
+            }}>Groupes</button>
+          <button
+            onClick={() => navigate('/pricing')}
+            style={{
+              background: 'transparent',
+              border: '1px solid #1e2d45',
+              color: '#94a3b8', padding: '6px 14px',
+              borderRadius: '8px', cursor: 'pointer',
+              fontSize: '12px',
+              fontFamily: 'Orbitron, sans-serif',
+            }}>Plans</button>
         </div>
       </div>
 
@@ -288,7 +300,6 @@ export function TranslatePage() {
             {planLabel}
           </span>
 
-          {/* Timer — seulement si pas Pro */}
           {plan !== 'pro' && secondsRemaining >= 0 && (
             <div style={{
               color: secondsRemaining < 120 ? '#ef4444' : '#94a3b8',
@@ -304,7 +315,6 @@ export function TranslatePage() {
             </div>
           )}
 
-          {/* Illimité — seulement Pro */}
           {plan === 'pro' && (
             <div style={{ color: '#a855f7', fontSize: '12px' }}>
               ∞ Illimité
@@ -314,10 +324,12 @@ export function TranslatePage() {
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {(plan === 'free' || plan === 'trial') && (
-            <button style={{
-              background: 'transparent', border: 'none',
-              color: '#06b6d4', cursor: 'pointer', fontSize: '12px',
-            }}>Upgrade →</button>
+            <button
+              onClick={() => navigate('/pricing')}
+              style={{
+                background: 'transparent', border: 'none',
+                color: '#06b6d4', cursor: 'pointer', fontSize: '12px',
+              }}>Upgrade →</button>
           )}
           <button
             onClick={signOut}
@@ -514,7 +526,9 @@ export function TranslatePage() {
               letterSpacing: '0.1em',
             }}>🎛️ EFFETS DE VOIX</div>
             {!canUseFeature('voiceEffects') && (
-              <span style={{ color: '#475569', fontSize: '11px', cursor: 'pointer' }}>
+              <span
+                onClick={() => navigate('/pricing')}
+                style={{ color: '#475569', fontSize: '11px', cursor: 'pointer' }}>
                 🔒 Unlock Starter
               </span>
             )}
