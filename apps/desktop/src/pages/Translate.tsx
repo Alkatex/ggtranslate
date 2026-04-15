@@ -4,17 +4,7 @@ import { SettingsPanel } from '../components/SettingsPanel'
 import { TranslationPipeline, PipelineState } from '../lib/pipeline'
 import { startOtherPlayers, stopOtherPlayers, OtherPlayersState } from '../lib/otherPlayersPipeline'
 import { useAuthStore } from '../store/auth'
-
-const LANGUAGES = [
-  { code: 'fr', flag: '🇫🇷', name: 'Français' },
-  { code: 'en', flag: '🇬🇧', name: 'English' },
-  { code: 'es', flag: '🇪🇸', name: 'Español' },
-  { code: 'de', flag: '🇩🇪', name: 'Deutsch' },
-  { code: 'pt', flag: '🇧🇷', name: 'Português' },
-  { code: 'ko', flag: '🇰🇷', name: '한국어' },
-  { code: 'ja', flag: '🇯🇵', name: '日本語' },
-  { code: 'zh', flag: '🇨🇳', name: '中文' },
-]
+import { getAvailableLanguages } from '../lib/languages'
 
 const EFFECTS = ['Normal', 'Robot', 'Deep', 'Chipmunk', 'Alien', 'Ghost']
 
@@ -30,6 +20,7 @@ let feedCounter = 0
 export function TranslatePage() {
   const navigate = useNavigate()
   const { plan, secondsRemaining, canUseFeature, signOut } = useAuthStore()
+  const LANGUAGES = getAvailableLanguages(plan)
 
   const [sourceLang, setSourceLang] = useState('fr')
   const [targetLang, setTargetLang] = useState('en')

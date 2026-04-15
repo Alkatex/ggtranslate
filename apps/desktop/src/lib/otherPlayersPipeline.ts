@@ -20,15 +20,11 @@ export interface OtherPlayersConfig {
 let current: OtherPlayersConfig | null = null
 
 function mapMainState(state: string): OtherPlayersState | null {
-  if (state === 'inactive' || state === 'listening' || state === 'error') {
-    return state
-  }
+  if (state === 'inactive' || state === 'listening' || state === 'error') return state
   return null
 }
 
-export async function startOtherPlayers(
-  config: OtherPlayersConfig
-): Promise<void> {
+export async function startOtherPlayers(config: OtherPlayersConfig): Promise<void> {
   if (typeof window === 'undefined' || !window.electron?.otherPlayers) {
     config.onError('API Electron indisponible')
     config.onStateChange('error')
@@ -53,6 +49,7 @@ export async function startOtherPlayers(
 
   op.onTranscript(async (data) => {
     if (!current) return
+
     current.onTranscript(data.text, data.isFinal)
 
     if (data.isFinal && data.text.trim()) {

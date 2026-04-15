@@ -504,7 +504,7 @@
     "prefix": "C:\\Users\\Marco\\AppData\\Roaming\\npm",
     "npm_version": "11.11.0",
     "node_gyp": "C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\node-gyp\\bin\\node-gyp.js",
-    "local_prefix": "D:\\ggtranslate\\apps\\desktop\\native\\loopback-capture",
+    "local_prefix": "D:\\ggtranslate",
     "init_module": "C:\\Users\\Marco\\.npm-init.js",
     "global_prefix": "C:\\Users\\Marco\\AppData\\Roaming\\npm",
     "globalconfig": "C:\\Users\\Marco\\AppData\\Roaming\\npm\\etc\\npmrc",

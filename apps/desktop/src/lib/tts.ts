@@ -12,6 +12,22 @@ const VOICE_BY_LANG: Record<string, string> = {
 
 const DEFAULT_VOICE = 'aura-2-thalia-en'
 
+// Flag global — true quand TTS joue
+export let isTTSPlaying = false
+let ttsPlayingTimeout: ReturnType<typeof setTimeout> | null = null
+
+function setTTSPlaying(playing: boolean) {
+  isTTSPlaying = playing
+  if (ttsPlayingTimeout) clearTimeout(ttsPlayingTimeout)
+  if (!playing) {
+    // Garde le flag actif 1.5 sec après la fin du TTS
+    // pour absorber l'écho résiduel
+    ttsPlayingTimeout = setTimeout(() => {
+      isTTSPlaying = false
+    }, 1500)
+  }
+}
+
 class TTSQueue {
   private queue: Array<{
     text: string
@@ -26,16 +42,9 @@ class TTSQueue {
     this.name = name
   }
 
-  async add(
-    text: string,
-    headsetDeviceId: string | null,
-    voice: string,
-    targetLang: string
-  ) {
+  async add(text: string, headsetDeviceId: string | null, voice: string, targetLang: string) {
     this.queue.push({ text, headsetDeviceId, voice, targetLang })
-    if (!this.isPlaying) {
-      await this.processQueue()
-    }
+    if (!this.isPlaying) await this.processQueue()
   }
 
   private async processQueue() {
@@ -43,16 +52,16 @@ class TTSQueue {
       this.isPlaying = false
       return
     }
-
     this.isPlaying = true
     const item = this.queue.shift()!
-
     try {
+      setTTSPlaying(true)
       await playAudio(item.text, item.headsetDeviceId, item.voice, item.targetLang)
     } catch (err) {
       console.error(`Erreur TTS [${this.name}]:`, err)
+    } finally {
+      setTTSPlaying(false)
     }
-
     await this.processQueue()
   }
 
@@ -66,10 +75,7 @@ const myVoiceQueue = new TTSQueue('my-voice')
 const otherPlayersQueue = new TTSQueue('other-players')
 
 function normalizeLang(targetLang: string): string {
-  return String(targetLang || 'en')
-    .toLowerCase()
-    .split('-')[0]
-    .trim()
+  return String(targetLang || 'en').toLowerCase().split('-')[0].trim()
 }
 
 function getVoiceForLanguage(targetLang: string): string {
@@ -83,19 +89,13 @@ async function playAudio(
   voice: string,
   targetLang: string
 ): Promise<void> {
-  console.log('🔊 playAudio:', { targetLang, voice, text: text.slice(0, 80) })
-
   const res = await fetch(`${API_URL}/ai/tts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, voice, targetLang }),
   })
 
-  if (!res.ok) {
-    const errorText = await res.text()
-    console.error('❌ Erreur TTS backend:', errorText)
-    throw new Error('Erreur TTS')
-  }
+  if (!res.ok) throw new Error('Erreur TTS')
 
   const audioBlob = await res.blob()
   const audioUrl = URL.createObjectURL(audioBlob)
@@ -106,18 +106,9 @@ async function playAudio(
   }
 
   return new Promise((resolve, reject) => {
-    audio.onended = () => {
-      URL.revokeObjectURL(audioUrl)
-      resolve()
-    }
-    audio.onerror = () => {
-      URL.revokeObjectURL(audioUrl)
-      reject(new Error('Erreur lecture audio'))
-    }
-    audio.play().catch((err) => {
-      URL.revokeObjectURL(audioUrl)
-      reject(err)
-    })
+    audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve() }
+    audio.onerror = () => { URL.revokeObjectURL(audioUrl); reject(new Error('Erreur lecture')) }
+    audio.play().catch(err => { URL.revokeObjectURL(audioUrl); reject(err) })
   })
 }
 
@@ -141,10 +132,5 @@ export async function speakOtherPlayers(
   await otherPlayersQueue.add(text, headsetDeviceId, voice, normalizedLang)
 }
 
-export function clearTTSQueue() {
-  myVoiceQueue.clear()
-}
-
-export function clearOtherPlayersTTSQueue() {
-  otherPlayersQueue.clear()
-}
+export function clearTTSQueue() { myVoiceQueue.clear() }
+export function clearOtherPlayersTTSQueue() { otherPlayersQueue.clear() }
