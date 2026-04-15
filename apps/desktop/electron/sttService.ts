@@ -41,8 +41,9 @@ export async function startSTTSession(
 
   return new Promise((resolve, reject) => {
     connection.addListener('open', () => {
+      if (!currentSession) return
       console.log('✅ Deepgram STT connecté depuis Electron main')
-      currentSession!.isActive = true
+      currentSession.isActive = true
       win.webContents.send('stt:state', 'listening')
       resolve()
     })
@@ -50,12 +51,9 @@ export async function startSTTSession(
     connection.addListener('transcriptReceived', (message: string) => {
       try {
         const data = JSON.parse(message)
-        console.log('📨 Message Deepgram:', data.type)
-
         if (data.type === 'Results') {
           const transcript = data?.channel?.alternatives?.[0]?.transcript
           if (transcript && transcript.trim()) {
-            console.log('📝 Transcript:', transcript, '| Final:', data.is_final)
             win.webContents.send('stt:transcript', {
               text: transcript,
               isFinal: data.is_final,

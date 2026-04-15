@@ -5,8 +5,7 @@ import { TranslationPipeline, PipelineState } from '../lib/pipeline'
 import { startOtherPlayers, stopOtherPlayers, OtherPlayersState } from '../lib/otherPlayersPipeline'
 import { useAuthStore } from '../store/auth'
 import { getAvailableLanguages } from '../lib/languages'
-
-const EFFECTS = ['Normal', 'Robot', 'Deep', 'Chipmunk', 'Alien', 'Ghost']
+import { getAvailableEffects, VoiceEffect } from '../lib/voiceEffects'
 
 interface FeedItem {
   id: number
@@ -21,6 +20,7 @@ export function TranslatePage() {
   const navigate = useNavigate()
   const { plan, secondsRemaining, canUseFeature, signOut } = useAuthStore()
   const LANGUAGES = getAvailableLanguages(plan)
+  const EFFECTS = getAvailableEffects(plan)
 
   const [sourceLang, setSourceLang] = useState('fr')
   const [targetLang, setTargetLang] = useState('en')
@@ -39,11 +39,18 @@ export function TranslatePage() {
   const [otherFeed, setOtherFeed] = useState<FeedItem[]>([])
   const [otherError, setOtherError] = useState('')
 
+  const [selectedCategory, setSelectedCategory] = useState('Tous')
+
   const pipelineRef = useRef<TranslationPipeline | null>(null)
   const myFeedRef = useRef<HTMLDivElement>(null)
   const otherFeedRef = useRef<HTMLDivElement>(null)
   const currentTranscriptRef = useRef('')
   const currentOtherTranscriptRef = useRef('')
+
+  const categories = ['Tous', ...Array.from(new Set(EFFECTS.map(e => e.category)))]
+  const filteredEffects = selectedCategory === 'Tous'
+    ? EFFECTS
+    : EFFECTS.filter(e => e.category === selectedCategory)
 
   useEffect(() => {
     pipelineRef.current = new TranslationPipeline()
@@ -72,15 +79,12 @@ export function TranslatePage() {
     }
   }, [otherFeed])
 
-  // Timer — décompte seulement si pas Pro
   useEffect(() => {
     if (plan === 'pro') return
     if (liveState !== 'listening' && liveState !== 'processing') return
-
     const interval = setInterval(() => {
       useAuthStore.getState().consumeSeconds(1)
     }, 1000)
-
     return () => clearInterval(interval)
   }, [liveState, plan])
 
@@ -99,6 +103,7 @@ export function TranslatePage() {
         headsetDeviceId,
         sourceLang,
         targetLang,
+        voiceEffect: activeEffect,
         onStateChange: (state) => setLiveState(state),
         onTranscript: (text, _isFinal) => {
           setCurrentTranscript(text)
@@ -239,35 +244,23 @@ export function TranslatePage() {
           }}>TRADUCTION VOCALE GAMING</div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setShowSettings(true)}
-            style={{
-              background: 'transparent',
-              border: '1px solid #1e2d45',
-              color: '#94a3b8', padding: '6px 14px',
-              borderRadius: '8px', cursor: 'pointer',
-              fontSize: '16px',
-            }}>⚙️</button>
-          <button
-            onClick={() => navigate('/groups')}
-            style={{
-              background: 'transparent',
-              border: '1px solid #1e2d45',
-              color: '#94a3b8', padding: '6px 14px',
-              borderRadius: '8px', cursor: 'pointer',
-              fontSize: '12px',
-              fontFamily: 'Orbitron, sans-serif',
-            }}>Groupes</button>
-          <button
-            onClick={() => navigate('/pricing')}
-            style={{
-              background: 'transparent',
-              border: '1px solid #1e2d45',
-              color: '#94a3b8', padding: '6px 14px',
-              borderRadius: '8px', cursor: 'pointer',
-              fontSize: '12px',
-              fontFamily: 'Orbitron, sans-serif',
-            }}>Plans</button>
+          <button onClick={() => setShowSettings(true)} style={{
+            background: 'transparent', border: '1px solid #1e2d45',
+            color: '#94a3b8', padding: '6px 14px',
+            borderRadius: '8px', cursor: 'pointer', fontSize: '16px',
+          }}>⚙️</button>
+          <button onClick={() => navigate('/groups')} style={{
+            background: 'transparent', border: '1px solid #1e2d45',
+            color: '#94a3b8', padding: '6px 14px',
+            borderRadius: '8px', cursor: 'pointer', fontSize: '12px',
+            fontFamily: 'Orbitron, sans-serif',
+          }}>Groupes</button>
+          <button onClick={() => navigate('/pricing')} style={{
+            background: 'transparent', border: '1px solid #1e2d45',
+            color: '#94a3b8', padding: '6px 14px',
+            borderRadius: '8px', cursor: 'pointer', fontSize: '12px',
+            fontFamily: 'Orbitron, sans-serif',
+          }}>Plans</button>
         </div>
       </div>
 
@@ -281,53 +274,38 @@ export function TranslatePage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{
-            background: `${planColor}22`,
-            color: planColor,
-            padding: '4px 12px',
-            borderRadius: '99px', fontSize: '11px',
-            fontFamily: 'Orbitron, sans-serif',
-            border: `1px solid ${planColor}44`,
-          }}>
-            {planLabel}
-          </span>
+            background: `${planColor}22`, color: planColor,
+            padding: '4px 12px', borderRadius: '99px', fontSize: '11px',
+            fontFamily: 'Orbitron, sans-serif', border: `1px solid ${planColor}44`,
+          }}>{planLabel}</span>
 
           {plan !== 'pro' && secondsRemaining >= 0 && (
             <div style={{
               color: secondsRemaining < 120 ? '#ef4444' : '#94a3b8',
-              fontSize: '12px',
-              fontWeight: secondsRemaining < 120 ? 700 : 400,
+              fontSize: '12px', fontWeight: secondsRemaining < 120 ? 700 : 400,
             }}>
-              <span style={{
-                color: secondsRemaining < 120 ? '#ef4444' : '#fff',
-                fontWeight: 600,
-              }}>
+              <span style={{ color: secondsRemaining < 120 ? '#ef4444' : '#fff', fontWeight: 600 }}>
                 {Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}
               </span> restantes
             </div>
           )}
 
           {plan === 'pro' && (
-            <div style={{ color: '#a855f7', fontSize: '12px' }}>
-              ∞ Illimité
-            </div>
+            <div style={{ color: '#a855f7', fontSize: '12px' }}>∞ Illimité</div>
           )}
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {(plan === 'free' || plan === 'trial') && (
-            <button
-              onClick={() => navigate('/pricing')}
-              style={{
-                background: 'transparent', border: 'none',
-                color: '#06b6d4', cursor: 'pointer', fontSize: '12px',
-              }}>Upgrade →</button>
-          )}
-          <button
-            onClick={signOut}
-            style={{
+            <button onClick={() => navigate('/pricing')} style={{
               background: 'transparent', border: 'none',
-              color: '#475569', cursor: 'pointer', fontSize: '12px',
-            }}>Déconnexion</button>
+              color: '#06b6d4', cursor: 'pointer', fontSize: '12px',
+            }}>Upgrade →</button>
+          )}
+          <button onClick={signOut} style={{
+            background: 'transparent', border: 'none',
+            color: '#475569', cursor: 'pointer', fontSize: '12px',
+          }}>Déconnexion</button>
         </div>
       </div>
 
@@ -352,9 +330,7 @@ export function TranslatePage() {
               fontSize: '14px', cursor: 'pointer',
             }}>
             {LANGUAGES.map(l => (
-              <option key={l.code} value={l.code}>
-                {l.flag} {l.name}
-              </option>
+              <option key={l.code} value={l.code}>{l.flag} {l.name}</option>
             ))}
           </select>
         </div>
@@ -382,9 +358,7 @@ export function TranslatePage() {
               fontSize: '14px', cursor: 'pointer',
             }}>
             {LANGUAGES.map(l => (
-              <option key={l.code} value={l.code}>
-                {l.flag} {l.name}
-              </option>
+              <option key={l.code} value={l.code}>{l.flag} {l.name}</option>
             ))}
           </select>
         </div>
@@ -393,8 +367,7 @@ export function TranslatePage() {
       {/* MA VOIX */}
       <div style={{
         background: '#0d1424', border: '1px solid #1e2d45',
-        borderRadius: '12px', padding: '20px',
-        marginBottom: '16px',
+        borderRadius: '12px', padding: '20px', marginBottom: '16px',
       }}>
         <div style={{
           display: 'flex', justifyContent: 'space-between',
@@ -404,68 +377,54 @@ export function TranslatePage() {
             <span style={{ color: '#06b6d4', fontSize: '16px' }}>🎤</span>
             <div>
               <div style={{
-                fontFamily: 'Orbitron, sans-serif',
-                fontSize: '12px', color: '#fff',
-                letterSpacing: '0.1em',
+                fontFamily: 'Orbitron, sans-serif', fontSize: '12px',
+                color: '#fff', letterSpacing: '0.1em',
               }}>MA VOIX</div>
               <div style={{ color: '#475569', fontSize: '11px' }}>
                 {micDeviceId ? '✅ Micro configuré' : 'Micro par défaut'}
               </div>
             </div>
           </div>
-          <div style={{
-            color: liveColors[liveState], fontSize: '11px',
-            fontFamily: 'Orbitron, sans-serif',
-          }}>
+          <div style={{ color: liveColors[liveState], fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>
             {liveState === 'inactive' ? '● APPUIE POUR DÉMARRER' : liveLabels[liveState]}
           </div>
         </div>
 
         <div style={{
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', gap: '16px',
-          padding: '20px 0',
-          borderBottom: '1px solid #1e2d45',
-          marginBottom: '16px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px',
+          padding: '20px 0', borderBottom: '1px solid #1e2d45', marginBottom: '16px',
         }}>
           <button
             onClick={toggleLive}
             disabled={isLocked}
             style={{
               width: '96px', height: '96px', borderRadius: '50%',
-              background: '#111827',
-              border: `2px solid ${liveColors[liveState]}`,
+              background: '#111827', border: `2px solid ${liveColors[liveState]}`,
               cursor: isLocked ? 'not-allowed' : 'pointer',
               display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
               gap: '4px', transition: 'all 0.2s',
-              boxShadow: liveState === 'listening'
-                ? '0 0 20px rgba(6,182,212,0.3)' : 'none',
+              boxShadow: liveState === 'listening' ? '0 0 20px rgba(6,182,212,0.3)' : 'none',
               opacity: isLocked ? 0.7 : 1,
             }}>
             <span style={{ fontSize: '24px', color: liveColors[liveState] }}>◉</span>
             <span style={{
-              fontFamily: 'Orbitron, sans-serif',
-              fontSize: '10px', color: liveColors[liveState],
-              letterSpacing: '0.15em',
+              fontFamily: 'Orbitron, sans-serif', fontSize: '10px',
+              color: liveColors[liveState], letterSpacing: '0.15em',
             }}>LIVE</span>
           </button>
 
-          <div style={{
-            color: liveColors[liveState], fontSize: '11px',
-            fontFamily: 'Orbitron, sans-serif',
-          }}>{liveLabels[liveState]}</div>
+          <div style={{ color: liveColors[liveState], fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>
+            {liveLabels[liveState]}
+          </div>
 
           {currentTranscript && (
             <div style={{
               width: '100%', padding: '8px 16px',
-              background: 'rgba(6,182,212,0.05)',
-              borderRadius: '8px', fontSize: '13px',
-              color: '#06b6d4', fontStyle: 'italic',
+              background: 'rgba(6,182,212,0.05)', borderRadius: '8px',
+              fontSize: '13px', color: '#06b6d4', fontStyle: 'italic',
               border: '1px solid rgba(6,182,212,0.15)',
-            }}>
-              {currentTranscript}
-            </div>
+            }}>{currentTranscript}</div>
           )}
 
           {errorMsg && (
@@ -474,13 +433,10 @@ export function TranslatePage() {
         </div>
 
         {/* FEED MA VOIX */}
-        <div
-          ref={myFeedRef}
-          style={{
-            maxHeight: '200px', overflowY: 'auto',
-            display: 'flex', flexDirection: 'column', gap: '8px',
-            marginBottom: '16px',
-          }}>
+        <div ref={myFeedRef} style={{
+          maxHeight: '200px', overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px',
+        }}>
           {myFeed.length === 0 ? (
             <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '16px' }}>
               Les traductions apparaîtront ici
@@ -491,15 +447,9 @@ export function TranslatePage() {
                 background: '#111827', borderRadius: '8px',
                 padding: '10px 14px', border: '1px solid #1e2d45',
               }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
-                  {item.original}
-                </div>
-                <div style={{ color: '#06b6d4', fontSize: '13px', marginBottom: '4px' }}>
-                  → {item.translated}
-                </div>
-                <div style={{ color: '#475569', fontSize: '10px' }}>
-                  {item.timestamp}
-                </div>
+                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{item.original}</div>
+                <div style={{ color: '#06b6d4', fontSize: '13px', marginBottom: '4px' }}>→ {item.translated}</div>
+                <div style={{ color: '#475569', fontSize: '10px' }}>{item.timestamp}</div>
               </div>
             ))
           )}
@@ -512,36 +462,55 @@ export function TranslatePage() {
             alignItems: 'center', marginBottom: '12px',
           }}>
             <div style={{
-              fontFamily: 'Orbitron, sans-serif',
-              fontSize: '11px', color: '#06b6d4',
-              letterSpacing: '0.1em',
+              fontFamily: 'Orbitron, sans-serif', fontSize: '11px',
+              color: '#06b6d4', letterSpacing: '0.1em',
             }}>🎛️ EFFETS DE VOIX</div>
-            {!canUseFeature('voiceEffects') && (
-              <span
-                onClick={() => navigate('/pricing')}
-                style={{ color: '#475569', fontSize: '11px', cursor: 'pointer' }}>
-                🔒 Unlock Starter
+            {!canUseFeature('voiceEffects') ? (
+              <span onClick={() => navigate('/pricing')} style={{
+                color: '#475569', fontSize: '11px', cursor: 'pointer',
+              }}>🔒 Unlock Starter</span>
+            ) : (
+              <span style={{ color: '#475569', fontSize: '11px' }}>
+                {activeEffect !== 'normal' ? `✅ ${EFFECTS.find(e => e.id === activeEffect)?.emoji} ${EFFECTS.find(e => e.id === activeEffect)?.name}` : 'Normal'}
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {EFFECTS.map(effect => (
+
+          {/* CATEGORIES */}
+          {canUseFeature('voiceEffects') && (
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  style={{
+                    background: selectedCategory === cat ? 'rgba(6,182,212,0.15)' : 'transparent',
+                    border: `1px solid ${selectedCategory === cat ? '#06b6d4' : '#1e2d45'}`,
+                    color: selectedCategory === cat ? '#06b6d4' : '#475569',
+                    padding: '3px 10px', borderRadius: '99px',
+                    cursor: 'pointer', fontSize: '11px',
+                    transition: 'all 0.2s',
+                  }}>{cat}</button>
+              ))}
+            </div>
+          )}
+
+          {/* EFFETS */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {filteredEffects.map((effect: VoiceEffect) => (
               <button
-                key={effect}
-                onClick={() => canUseFeature('voiceEffects') && setActiveEffect(effect.toLowerCase())}
+                key={effect.id}
+                onClick={() => canUseFeature('voiceEffects') && setActiveEffect(effect.id)}
                 style={{
-                  background: activeEffect === effect.toLowerCase()
-                    ? 'rgba(6,182,212,0.15)' : 'transparent',
-                  border: `1px solid ${activeEffect === effect.toLowerCase()
-                    ? '#06b6d4' : '#1e2d45'}`,
-                  color: activeEffect === effect.toLowerCase()
-                    ? '#06b6d4'
+                  background: activeEffect === effect.id ? 'rgba(6,182,212,0.15)' : 'transparent',
+                  border: `1px solid ${activeEffect === effect.id ? '#06b6d4' : '#1e2d45'}`,
+                  color: activeEffect === effect.id ? '#06b6d4'
                     : canUseFeature('voiceEffects') ? '#94a3b8' : '#334155',
-                  padding: '6px 14px', borderRadius: '8px',
+                  padding: '5px 12px', borderRadius: '8px',
                   cursor: canUseFeature('voiceEffects') ? 'pointer' : 'not-allowed',
                   fontSize: '12px', transition: 'all 0.2s',
                   opacity: canUseFeature('voiceEffects') ? 1 : 0.5,
-                }}>{effect}</button>
+                }}>{effect.emoji} {effect.name}</button>
             ))}
           </div>
         </div>
@@ -550,8 +519,7 @@ export function TranslatePage() {
       {/* AUTRES JOUEURS */}
       <div style={{
         background: '#0d1424', border: '1px solid #1e2d45',
-        borderRadius: '12px', padding: '20px',
-        marginBottom: '16px',
+        borderRadius: '12px', padding: '20px', marginBottom: '16px',
       }}>
         <div style={{
           display: 'flex', justifyContent: 'space-between',
@@ -561,9 +529,8 @@ export function TranslatePage() {
             <span style={{ fontSize: '18px' }}>🖥️</span>
             <div>
               <div style={{
-                fontFamily: 'Orbitron, sans-serif',
-                fontSize: '12px', color: '#fff',
-                letterSpacing: '0.1em',
+                fontFamily: 'Orbitron, sans-serif', fontSize: '12px',
+                color: '#fff', letterSpacing: '0.1em',
               }}>AUTRES JOUEURS</div>
               <div style={{ color: '#475569', fontSize: '11px' }}>
                 {canUseFeature('otherPlayers')
@@ -572,11 +539,7 @@ export function TranslatePage() {
               </div>
             </div>
           </div>
-          <div style={{
-            color: otherColors[otherPlayersState],
-            fontSize: '11px',
-            fontFamily: 'Orbitron, sans-serif',
-          }}>
+          <div style={{ color: otherColors[otherPlayersState], fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>
             {otherLabels[otherPlayersState]}
           </div>
         </div>
@@ -584,17 +547,14 @@ export function TranslatePage() {
         <button
           onClick={toggleOtherPlayers}
           style={{
-            background: otherPlayersState !== 'inactive'
-              ? 'rgba(168,85,247,0.15)' : 'transparent',
+            background: otherPlayersState !== 'inactive' ? 'rgba(168,85,247,0.15)' : 'transparent',
             border: `1px solid ${otherPlayersState !== 'inactive' ? '#a855f7' : '#1e2d45'}`,
             color: otherPlayersState !== 'inactive' ? '#a855f7'
               : canUseFeature('otherPlayers') ? '#94a3b8' : '#334155',
-            padding: '8px 16px', borderRadius: '8px',
-            cursor: 'pointer', fontSize: '12px',
-            display: 'flex', alignItems: 'center', gap: '8px',
-            fontFamily: 'Orbitron, sans-serif',
-            marginBottom: '12px', transition: 'all 0.2s',
-            opacity: canUseFeature('otherPlayers') ? 1 : 0.6,
+            padding: '8px 16px', borderRadius: '8px', cursor: 'pointer',
+            fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px',
+            fontFamily: 'Orbitron, sans-serif', marginBottom: '12px',
+            transition: 'all 0.2s', opacity: canUseFeature('otherPlayers') ? 1 : 0.6,
           }}>
           {otherPlayersState !== 'inactive' ? '⏹ ARRÊTER'
             : canUseFeature('otherPlayers') ? '🖥️ CAPTURER'
@@ -604,21 +564,16 @@ export function TranslatePage() {
         {currentOtherTranscript && (
           <div style={{
             padding: '8px 16px', marginBottom: '8px',
-            background: 'rgba(168,85,247,0.05)',
-            borderRadius: '8px', fontSize: '13px',
-            color: '#a855f7', fontStyle: 'italic',
+            background: 'rgba(168,85,247,0.05)', borderRadius: '8px',
+            fontSize: '13px', color: '#a855f7', fontStyle: 'italic',
             border: '1px solid rgba(168,85,247,0.15)',
-          }}>
-            {currentOtherTranscript}
-          </div>
+          }}>{currentOtherTranscript}</div>
         )}
 
-        <div
-          ref={otherFeedRef}
-          style={{
-            maxHeight: '200px', overflowY: 'auto',
-            display: 'flex', flexDirection: 'column', gap: '8px',
-          }}>
+        <div ref={otherFeedRef} style={{
+          maxHeight: '200px', overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', gap: '8px',
+        }}>
           {otherFeed.length === 0 ? (
             <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '16px' }}>
               {canUseFeature('otherPlayers')
@@ -633,15 +588,9 @@ export function TranslatePage() {
                 background: '#111827', borderRadius: '8px',
                 padding: '10px 14px', border: '1px solid #1e2d45',
               }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
-                  {item.original}
-                </div>
-                <div style={{ color: '#a855f7', fontSize: '13px', marginBottom: '4px' }}>
-                  → {item.translated}
-                </div>
-                <div style={{ color: '#475569', fontSize: '10px' }}>
-                  {item.timestamp}
-                </div>
+                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{item.original}</div>
+                <div style={{ color: '#a855f7', fontSize: '13px', marginBottom: '4px' }}>→ {item.translated}</div>
+                <div style={{ color: '#475569', fontSize: '10px' }}>{item.timestamp}</div>
               </div>
             ))
           )}
@@ -658,9 +607,8 @@ export function TranslatePage() {
         borderRadius: '12px', padding: '16px',
       }}>
         <div style={{
-          fontFamily: 'Orbitron, sans-serif',
-          fontSize: '11px', color: '#06b6d4',
-          letterSpacing: '0.1em', marginBottom: '12px',
+          fontFamily: 'Orbitron, sans-serif', fontSize: '11px',
+          color: '#06b6d4', letterSpacing: '0.1em', marginBottom: '12px',
         }}>⚡ PHRASES RAPIDES</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {[
@@ -670,11 +618,9 @@ export function TranslatePage() {
             '🔴 Regroupez-vous', '⚡ On pousse',
           ].map(phrase => (
             <button key={phrase} style={{
-              background: 'transparent',
-              border: '1px solid #1e2d45',
+              background: 'transparent', border: '1px solid #1e2d45',
               color: '#94a3b8', padding: '6px 12px',
-              borderRadius: '8px', cursor: 'pointer',
-              fontSize: '12px',
+              borderRadius: '8px', cursor: 'pointer', fontSize: '12px',
             }}>{phrase}</button>
           ))}
         </div>

@@ -105,7 +105,8 @@ export class TranslationPipeline {
       speakTranslation(
         translated,
         config.headsetDeviceId,
-        config.targetLang
+        config.targetLang,
+        config.voiceEffect || 'normal'
       ).catch((err) => {
         console.error('Erreur TTS:', err)
       })

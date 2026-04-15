@@ -1,3 +1,5 @@
+import { applyVoiceEffect } from './voiceEffects'
+
 const API_URL = 'http://localhost:3001'
 
 const VOICE_BY_LANG: Record<string, string> = {
@@ -12,28 +14,13 @@ const VOICE_BY_LANG: Record<string, string> = {
 
 const DEFAULT_VOICE = 'aura-2-thalia-en'
 
-// Flag global — true quand TTS joue
-export let isTTSPlaying = false
-let ttsPlayingTimeout: ReturnType<typeof setTimeout> | null = null
-
-function setTTSPlaying(playing: boolean) {
-  isTTSPlaying = playing
-  if (ttsPlayingTimeout) clearTimeout(ttsPlayingTimeout)
-  if (!playing) {
-    // Garde le flag actif 1.5 sec après la fin du TTS
-    // pour absorber l'écho résiduel
-    ttsPlayingTimeout = setTimeout(() => {
-      isTTSPlaying = false
-    }, 1500)
-  }
-}
-
 class TTSQueue {
   private queue: Array<{
     text: string
     headsetDeviceId: string | null
     voice: string
     targetLang: string
+    effectId: string
   }> = []
   private isPlaying = false
   private name: string
@@ -42,8 +29,14 @@ class TTSQueue {
     this.name = name
   }
 
-  async add(text: string, headsetDeviceId: string | null, voice: string, targetLang: string) {
-    this.queue.push({ text, headsetDeviceId, voice, targetLang })
+  async add(
+    text: string,
+    headsetDeviceId: string | null,
+    voice: string,
+    targetLang: string,
+    effectId: string = 'normal'
+  ) {
+    this.queue.push({ text, headsetDeviceId, voice, targetLang, effectId })
     if (!this.isPlaying) await this.processQueue()
   }
 
@@ -55,12 +48,9 @@ class TTSQueue {
     this.isPlaying = true
     const item = this.queue.shift()!
     try {
-      setTTSPlaying(true)
-      await playAudio(item.text, item.headsetDeviceId, item.voice, item.targetLang)
+      await playAudio(item.text, item.headsetDeviceId, item.voice, item.targetLang, item.effectId)
     } catch (err) {
       console.error(`Erreur TTS [${this.name}]:`, err)
-    } finally {
-      setTTSPlaying(false)
     }
     await this.processQueue()
   }
@@ -87,7 +77,8 @@ async function playAudio(
   text: string,
   headsetDeviceId: string | null,
   voice: string,
-  targetLang: string
+  targetLang: string,
+  effectId: string = 'normal'
 ): Promise<void> {
   const res = await fetch(`${API_URL}/ai/tts`, {
     method: 'POST',
@@ -98,28 +89,42 @@ async function playAudio(
   if (!res.ok) throw new Error('Erreur TTS')
 
   const audioBlob = await res.blob()
-  const audioUrl = URL.createObjectURL(audioBlob)
-  const audio = new Audio(audioUrl)
+  const arrayBuffer = await audioBlob.arrayBuffer()
 
-  if (headsetDeviceId && 'setSinkId' in audio) {
-    await (audio as any).setSinkId(headsetDeviceId)
+  const audioCtx = new AudioContext()
+
+  if (headsetDeviceId && 'setSinkId' in audioCtx) {
+    await (audioCtx as any).setSinkId(headsetDeviceId)
   }
 
-  return new Promise((resolve, reject) => {
-    audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve() }
-    audio.onerror = () => { URL.revokeObjectURL(audioUrl); reject(new Error('Erreur lecture')) }
-    audio.play().catch(err => { URL.revokeObjectURL(audioUrl); reject(err) })
+  let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+
+  if (effectId && effectId !== 'normal') {
+    audioBuffer = await applyVoiceEffect(audioBuffer, effectId)
+  }
+
+  const source = audioCtx.createBufferSource()
+  source.buffer = audioBuffer
+  source.connect(audioCtx.destination)
+
+  return new Promise((resolve) => {
+    source.addEventListener('ended', () => {
+      audioCtx.close()
+      resolve()
+    })
+    source.start()
   })
 }
 
 export async function speakTranslation(
   text: string,
   headsetDeviceId: string | null,
-  targetLang: string = 'en'
+  targetLang: string = 'en',
+  effectId: string = 'normal'
 ): Promise<void> {
   const normalizedLang = normalizeLang(targetLang)
   const voice = getVoiceForLanguage(normalizedLang)
-  await myVoiceQueue.add(text, headsetDeviceId, voice, normalizedLang)
+  await myVoiceQueue.add(text, headsetDeviceId, voice, normalizedLang, effectId)
 }
 
 export async function speakOtherPlayers(
@@ -129,7 +134,7 @@ export async function speakOtherPlayers(
 ): Promise<void> {
   const normalizedLang = normalizeLang(targetLang)
   const voice = getVoiceForLanguage(normalizedLang)
-  await otherPlayersQueue.add(text, headsetDeviceId, voice, normalizedLang)
+  await otherPlayersQueue.add(text, headsetDeviceId, voice, normalizedLang, 'normal')
 }
 
 export function clearTTSQueue() { myVoiceQueue.clear() }
