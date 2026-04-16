@@ -42,6 +42,11 @@ export function TranslatePage() {
 
   const [selectedCategory, setSelectedCategory] = useState('Tous')
 
+  // Addiction triggers
+  const [sessionPhrases, setSessionPhrases] = useState(0)
+  const [showSessionBadge, setShowSessionBadge] = useState(false)
+  const [showUpgradePopup, setShowUpgradePopup] = useState(false)
+
   const pipelineRef = useRef<TranslationPipeline | null>(null)
   const myFeedRef = useRef<HTMLDivElement>(null)
   const otherFeedRef = useRef<HTMLDivElement>(null)
@@ -82,6 +87,7 @@ export function TranslatePage() {
     }
   }, [otherFeed])
 
+  // Timer
   useEffect(() => {
     if (plan === 'pro') return
     if (liveState !== 'listening' && liveState !== 'processing') return
@@ -90,6 +96,26 @@ export function TranslatePage() {
     }, 1000)
     return () => clearInterval(interval)
   }, [liveState, plan])
+
+  // Popup upgrade quand trial/free expire
+  useEffect(() => {
+    if (plan !== 'free' && plan !== 'trial') return
+    if (secondsRemaining === 0) {
+      setShowUpgradePopup(true)
+      pipelineRef.current?.stop()
+      setLiveState('inactive')
+      stopOtherPlayers()
+      setOtherPlayersState('inactive')
+    }
+  }, [secondsRemaining, plan])
+
+  // Badge session après 5 phrases
+  useEffect(() => {
+    if (sessionPhrases > 0 && sessionPhrases % 5 === 0) {
+      setShowSessionBadge(true)
+      setTimeout(() => setShowSessionBadge(false), 3000)
+    }
+  }, [sessionPhrases])
 
   const swapLanguages = () => {
     setSourceLang(targetLang)
@@ -122,6 +148,7 @@ export function TranslatePage() {
           }])
           setCurrentTranscript('')
           currentTranscriptRef.current = ''
+          setSessionPhrases(prev => prev + 1)
         },
         onError: (error) => {
           setErrorMsg(error)
@@ -164,6 +191,7 @@ export function TranslatePage() {
           }])
           setCurrentOtherTranscript('')
           currentOtherTranscriptRef.current = ''
+          setSessionPhrases(prev => prev + 1)
         },
         onError: (error) => {
           setOtherError(error)
@@ -209,6 +237,7 @@ export function TranslatePage() {
   }
 
   const isLocked = liveState === 'processing'
+  const isLowTime = plan !== 'pro' && secondsRemaining > 0 && secondsRemaining <= 120
 
   const planColor = plan === 'pro' ? '#a855f7'
     : plan === 'starter' ? '#3b82f6'
@@ -228,6 +257,97 @@ export function TranslatePage() {
       maxWidth: '800px',
       margin: '0 auto',
     }}>
+
+      <style>{`
+        @keyframes pulse-red {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        @keyframes slide-down {
+          from { transform: translateY(-20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes badge-pop {
+          0% { transform: scale(0.5); opacity: 0; }
+          70% { transform: scale(1.1); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+
+      {/* BADGE SESSION */}
+      {showSessionBadge && (
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+          borderRadius: '99px', padding: '10px 20px',
+          zIndex: 200, animation: 'badge-pop 0.4s ease',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+          <span style={{ fontSize: '18px' }}>🏆</span>
+          <span style={{
+            color: '#fff', fontSize: '13px',
+            fontFamily: 'Orbitron, sans-serif',
+            fontWeight: 700,
+          }}>
+            {sessionPhrases} phrases traduites cette session !
+          </span>
+        </div>
+      )}
+
+      {/* POPUP UPGRADE */}
+      {showUpgradePopup && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px',
+        }}>
+          <div style={{
+            background: '#0d1424',
+            border: '1px solid rgba(249,115,22,0.5)',
+            borderRadius: '20px', padding: '32px',
+            maxWidth: '420px', width: '100%',
+            textAlign: 'center',
+            animation: 'slide-down 0.3s ease',
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏱️</div>
+            <div style={{
+              fontFamily: 'Orbitron, sans-serif',
+              color: '#fff', fontSize: '20px',
+              marginBottom: '8px',
+            }}>Ton trial est terminé</div>
+            <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '24px' }}>
+              Tu as traduit <strong style={{ color: '#06b6d4' }}>{sessionPhrases} phrases</strong> cette session.
+              Continue sans limite avec un plan payant.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+              <button
+                onClick={() => { setShowUpgradePopup(false); navigate('/pricing') }}
+                style={{
+                  background: 'linear-gradient(to right, #f97316, #ef4444)',
+                  border: 'none', color: '#fff',
+                  padding: '14px', borderRadius: '10px',
+                  cursor: 'pointer', fontSize: '14px',
+                  fontFamily: 'Orbitron, sans-serif', fontWeight: 700,
+                }}>⚡ Upgrade maintenant</button>
+              <button
+                onClick={() => setShowUpgradePopup(false)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #1e2d45', color: '#475569',
+                  padding: '12px', borderRadius: '10px',
+                  cursor: 'pointer', fontSize: '13px',
+                }}>Continuer en Free (10 min/jour)</button>
+            </div>
+
+            <div style={{ color: '#475569', fontSize: '11px' }}>
+              Starter à 7,99$/mois · Pro à 14,99$/mois · Annulation en 1 clic
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NAVBAR */}
       <div style={{
@@ -271,11 +391,12 @@ export function TranslatePage() {
 
       {/* PLAN STATUS */}
       <div style={{
-        background: '#0d1424', border: '1px solid #1e2d45',
+        background: '#0d1424', border: `1px solid ${isLowTime ? 'rgba(239,68,68,0.5)' : '#1e2d45'}`,
         borderRadius: '12px', padding: '16px',
         marginBottom: '20px',
         display: 'flex', alignItems: 'center',
         justifyContent: 'space-between',
+        animation: isLowTime ? 'pulse-red 1s ease infinite' : 'none',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{
@@ -284,12 +405,15 @@ export function TranslatePage() {
             fontFamily: 'Orbitron, sans-serif', border: `1px solid ${planColor}44`,
           }}>{planLabel}</span>
 
-          {plan !== 'pro' && secondsRemaining >= 0 && (
+          {plan !== 'pro' && secondsRemaining > 0 && (
             <div style={{
-              color: secondsRemaining < 120 ? '#ef4444' : '#94a3b8',
-              fontSize: '12px', fontWeight: secondsRemaining < 120 ? 700 : 400,
+              color: isLowTime ? '#ef4444' : '#94a3b8',
+              fontSize: '12px', fontWeight: isLowTime ? 700 : 400,
             }}>
-              <span style={{ color: secondsRemaining < 120 ? '#ef4444' : '#fff', fontWeight: 600 }}>
+              <span style={{
+                color: isLowTime ? '#ef4444' : '#fff',
+                fontWeight: 600,
+              }}>
                 {Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}
               </span> restantes
             </div>
@@ -302,6 +426,12 @@ export function TranslatePage() {
           {virtualDeviceId && (
             <div style={{ color: '#22c55e', fontSize: '11px' }}>
               🎮 GGTranslate Mic actif
+            </div>
+          )}
+
+          {sessionPhrases > 0 && (
+            <div style={{ color: '#475569', fontSize: '11px' }}>
+              🗣️ {sessionPhrases} phrases
             </div>
           )}
         </div>
