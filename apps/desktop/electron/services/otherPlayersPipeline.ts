@@ -41,7 +41,7 @@ export async function startOtherPlayersPipeline(
     encoding: 'linear16',
     sample_rate: 48000,
     channels: 1,
-    endpointing: 300,
+    endpointing: 200,
     utterance_end_ms: 1000,
     vad_events: true,
   })

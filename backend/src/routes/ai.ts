@@ -4,11 +4,9 @@ const router = Router()
 
 router.get('/stt-token', async (_req, res) => {
   const apiKey = process.env.DEEPGRAM_API_KEY
-
   if (!apiKey) {
     return res.status(500).json({ error: 'Deepgram API key manquante' })
   }
-
   return res.json({ token: apiKey })
 })
 
@@ -77,6 +75,7 @@ router.post('/translate', async (req, res) => {
   }
 })
 
+// TTS avec streaming — réduit la latence
 router.post('/tts', async (req, res) => {
   const { text, voice = 'aura-2-thalia-en' } = req.body || {}
 
@@ -90,13 +89,13 @@ router.post('/tts', async (req, res) => {
   }
 
   try {
-    console.log('🔊 TTS Deepgram demandé:', {
+    console.log('🔊 TTS Deepgram streaming:', {
       text: String(text).slice(0, 80),
       voice,
     })
 
     const response = await fetch(
-      `https://api.deepgram.com/v1/speak?model=${encodeURIComponent(voice)}`,
+      `https://api.deepgram.com/v1/speak?model=${encodeURIComponent(voice)}&encoding=mp3`,
       {
         method: 'POST',
         headers: {
@@ -112,16 +111,46 @@ router.post('/tts', async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text()
       console.error('❌ Erreur TTS Deepgram:', response.status, errorText)
-
       return res.status(response.status).json({
         error: 'Erreur TTS Deepgram',
         details: errorText,
       })
     }
 
-    const audioBuffer = await response.arrayBuffer()
+    // Streaming direct — on pipe la réponse Deepgram vers le client
+    // sans attendre que tout le fichier soit téléchargé
     res.set('Content-Type', 'audio/mpeg')
-    return res.send(Buffer.from(audioBuffer))
+    res.set('Transfer-Encoding', 'chunked')
+    res.set('Cache-Control', 'no-cache')
+
+    if (response.body) {
+      const reader = response.body.getReader()
+      const stream = new (require('stream').Readable)({
+        read() {}
+      })
+
+      stream.pipe(res)
+
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            stream.push(null)
+            break
+          }
+          stream.push(Buffer.from(value))
+        }
+      }
+
+      pump().catch((err) => {
+        console.error('❌ Erreur streaming TTS:', err)
+        stream.destroy()
+      })
+    } else {
+      const audioBuffer = await response.arrayBuffer()
+      return res.send(Buffer.from(audioBuffer))
+    }
+
   } catch (err: any) {
     console.error('❌ Erreur TTS:', err)
     return res.status(500).json({
