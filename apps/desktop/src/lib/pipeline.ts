@@ -12,6 +12,7 @@ export type PipelineState =
 export interface PipelineConfig {
   micDeviceId: string | null
   headsetDeviceId: string | null
+  virtualDeviceId: string | null
   sourceLang: string
   targetLang: string
   voiceEffect?: string
@@ -32,46 +33,36 @@ export class TranslationPipeline {
   }
 
   async start(config: PipelineConfig) {
-    if (this.isRunning) {
-      this.stop()
-    }
+    if (this.isRunning) this.stop()
 
     this.sessionId += 1
     const currentSessionId = this.sessionId
-
     this.config = config
     this.isRunning = true
 
     try {
       await this.stt.init()
-
       if (!this.isSessionActive(currentSessionId)) return
 
       config.onStateChange('listening')
 
       await this.stt.start(config.micDeviceId, {
         language: config.sourceLang,
-
         onTranscript: (text, isFinal) => {
           if (!this.isSessionActive(currentSessionId)) return
-
           config.onTranscript(text, isFinal)
-
           if (isFinal && text.trim()) {
             this.processFinalTranscript(text, config, currentSessionId)
           }
         },
-
         onError: (error) => {
           if (!this.isSessionActive(currentSessionId)) return
-
           config.onStateChange('error')
           config.onError(error)
         },
       })
     } catch (err) {
       if (!this.isSessionActive(currentSessionId)) return
-
       config.onStateChange('error')
       config.onError('Impossible de démarrer le pipeline')
     }
@@ -91,30 +82,26 @@ export class TranslationPipeline {
     try {
       config.onStateChange('processing')
 
-      const translated = await translateText(
-        text,
-        config.sourceLang,
-        config.targetLang
-      )
+      const translated = await translateText(text, config.sourceLang, config.targetLang)
 
       if (!this.isSessionActive(sessionId)) return
 
       config.onTranslated(translated)
       config.onStateChange('listening')
 
+      // Jouer sur le virtual device si configuré, sinon sur le casque
+      const outputDevice = config.virtualDeviceId || config.headsetDeviceId
+
       speakTranslation(
         translated,
-        config.headsetDeviceId,
+        outputDevice,
         config.targetLang,
         config.voiceEffect || 'normal'
-      ).catch((err) => {
-        console.error('Erreur TTS:', err)
-      })
+      ).catch((err) => console.error('Erreur TTS:', err))
+
     } catch (err) {
       console.error('Erreur traduction:', err)
-
       if (!this.isSessionActive(sessionId)) return
-
       config.onStateChange('listening')
     }
   }
@@ -122,14 +109,9 @@ export class TranslationPipeline {
   stop() {
     this.isRunning = false
     this.sessionId += 1
-
     this.stt.stop()
     clearTTSQueue()
-
-    if (this.config) {
-      this.config.onStateChange('inactive')
-    }
-
+    if (this.config) this.config.onStateChange('inactive')
     this.config = null
   }
 }

@@ -29,6 +29,7 @@ export function TranslatePage() {
   const [showSettings, setShowSettings] = useState(false)
   const [micDeviceId, setMicDeviceId] = useState<string | null>(null)
   const [headsetDeviceId, setHeadsetDeviceId] = useState<string | null>(null)
+  const [virtualDeviceId, setVirtualDeviceId] = useState<string | null>(null)
 
   const [currentTranscript, setCurrentTranscript] = useState('')
   const [myFeed, setMyFeed] = useState<FeedItem[]>([])
@@ -57,8 +58,10 @@ export function TranslatePage() {
     async function loadSavedDevices() {
       const savedMic = await window.electron.settings.get('micDeviceId') as string
       const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
+      const savedVirtual = await window.electron.settings.get('virtualDeviceId') as string
       if (savedMic) setMicDeviceId(savedMic)
       if (savedHeadset) setHeadsetDeviceId(savedHeadset)
+      if (savedVirtual) setVirtualDeviceId(savedVirtual)
     }
     loadSavedDevices()
     return () => {
@@ -101,6 +104,7 @@ export function TranslatePage() {
       await pipelineRef.current?.start({
         micDeviceId,
         headsetDeviceId,
+        virtualDeviceId,
         sourceLang,
         targetLang,
         voiceEffect: activeEffect,
@@ -143,6 +147,7 @@ export function TranslatePage() {
       setOtherError('')
       await startOtherPlayers({
         headsetDeviceId,
+        virtualDeviceId,
         sourceLang: targetLang,
         targetLang: sourceLang,
         onStateChange: setOtherPlayersState,
@@ -293,6 +298,12 @@ export function TranslatePage() {
           {plan === 'pro' && (
             <div style={{ color: '#a855f7', fontSize: '12px' }}>∞ Illimité</div>
           )}
+
+          {virtualDeviceId && (
+            <div style={{ color: '#22c55e', fontSize: '11px' }}>
+              🎮 GGTranslate Mic actif
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -382,6 +393,7 @@ export function TranslatePage() {
               }}>MA VOIX</div>
               <div style={{ color: '#475569', fontSize: '11px' }}>
                 {micDeviceId ? '✅ Micro configuré' : 'Micro par défaut'}
+                {virtualDeviceId ? ' · 🎮 Sortie Discord active' : ''}
               </div>
             </div>
           </div>
@@ -476,7 +488,6 @@ export function TranslatePage() {
             )}
           </div>
 
-          {/* CATEGORIES */}
           {canUseFeature('voiceEffects') && (
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
               {categories.map(cat => (
@@ -488,14 +499,12 @@ export function TranslatePage() {
                     border: `1px solid ${selectedCategory === cat ? '#06b6d4' : '#1e2d45'}`,
                     color: selectedCategory === cat ? '#06b6d4' : '#475569',
                     padding: '3px 10px', borderRadius: '99px',
-                    cursor: 'pointer', fontSize: '11px',
-                    transition: 'all 0.2s',
+                    cursor: 'pointer', fontSize: '11px', transition: 'all 0.2s',
                   }}>{cat}</button>
               ))}
             </div>
           )}
 
-          {/* EFFETS */}
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {filteredEffects.map((effect: VoiceEffect) => (
               <button
@@ -629,9 +638,10 @@ export function TranslatePage() {
       {/* SETTINGS PANEL */}
       {showSettings && (
         <SettingsPanel
-          onClose={(mic, headset) => {
+          onClose={(mic, headset, virtual) => {
             setMicDeviceId(mic)
             setHeadsetDeviceId(headset)
+            setVirtualDeviceId(virtual)
             setShowSettings(false)
           }}
         />

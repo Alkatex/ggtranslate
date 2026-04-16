@@ -5,15 +5,22 @@ interface AudioDevice {
   label: string
 }
 
+interface VirtualDevice {
+  id: string
+  name: string
+}
+
 interface SettingsPanelProps {
-  onClose: (micDeviceId: string | null, headsetDeviceId: string | null) => void
+  onClose: (micDeviceId: string | null, headsetDeviceId: string | null, virtualDeviceId: string | null) => void
 }
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [inputs, setInputs] = useState<AudioDevice[]>([])
   const [outputs, setOutputs] = useState<AudioDevice[]>([])
+  const [virtualDevices, setVirtualDevices] = useState<VirtualDevice[]>([])
   const [selectedMic, setSelectedMic] = useState('')
   const [selectedHeadset, setSelectedHeadset] = useState('')
+  const [selectedVirtualDevice, setSelectedVirtualDevice] = useState('')
   const [micVolume, setMicVolume] = useState(0)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
@@ -35,11 +42,21 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           .map(d => ({ deviceId: d.deviceId, label: d.label || 'Sortie inconnue' }))
         )
 
+        // Charger les devices Virtual Audio
+        try {
+          const vDevices = await window.electron.virtualAudio.listDevices()
+          setVirtualDevices(vDevices)
+        } catch (err) {
+          console.error('Erreur chargement virtual devices:', err)
+        }
+
         // Restaurer les choix sauvegardés
         const savedMic = await window.electron.settings.get('micDeviceId') as string
         const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
+        const savedVirtual = await window.electron.settings.get('virtualDeviceId') as string
         if (savedMic) setSelectedMic(savedMic)
         if (savedHeadset) setSelectedHeadset(savedHeadset)
+        if (savedVirtual) setSelectedVirtualDevice(savedVirtual)
 
       } catch (err) {
         console.error('Erreur accès périphériques:', err)
@@ -88,14 +105,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   }
 
   const handleClose = () => {
-    // Sauvegarder dans electron-store
-    if (selectedMic) {
-      window.electron.settings.set('micDeviceId', selectedMic)
-    }
-    if (selectedHeadset) {
-      window.electron.settings.set('headsetDeviceId', selectedHeadset)
-    }
-    onClose(selectedMic || null, selectedHeadset || null)
+    if (selectedMic) window.electron.settings.set('micDeviceId', selectedMic)
+    if (selectedHeadset) window.electron.settings.set('headsetDeviceId', selectedHeadset)
+    if (selectedVirtualDevice) window.electron.settings.set('virtualDeviceId', selectedVirtualDevice)
+    onClose(selectedMic || null, selectedHeadset || null, selectedVirtualDevice || null)
   }
 
   return (
@@ -114,6 +127,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           border: '1px solid #1e2d45',
           borderRadius: '16px', padding: '28px',
           width: '100%', maxWidth: '480px',
+          maxHeight: '90vh', overflowY: 'auto',
         }}>
 
         <div style={{
@@ -133,6 +147,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             }}>✕</button>
         </div>
 
+        {/* MICROPHONE */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{
             color: '#06b6d4', fontSize: '11px',
@@ -189,7 +204,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           )}
         </div>
 
-        <div style={{ marginBottom: '24px' }}>
+        {/* CASQUE */}
+        <div style={{ marginBottom: '20px' }}>
           <div style={{
             color: '#06b6d4', fontSize: '11px',
             fontFamily: 'Orbitron, sans-serif',
@@ -209,6 +225,43 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
             ))}
           </select>
+        </div>
+
+        {/* VIRTUAL AUDIO DEVICE */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{
+            color: '#a855f7', fontSize: '11px',
+            fontFamily: 'Orbitron, sans-serif',
+            letterSpacing: '0.1em', marginBottom: '8px',
+          }}>🎮 SORTIE VERS DISCORD / JEU</div>
+          <div style={{
+            color: '#475569', fontSize: '11px',
+            marginBottom: '8px',
+          }}>
+            Sélectionne le device où la traduction sera envoyée pour que tes coéquipiers l'entendent
+          </div>
+          <select
+            value={selectedVirtualDevice}
+            onChange={e => setSelectedVirtualDevice(e.target.value)}
+            style={{
+              width: '100%', background: '#111827',
+              border: '1px solid #2d1f45', color: '#fff',
+              padding: '10px 14px', borderRadius: '8px',
+              fontSize: '13px', cursor: 'pointer',
+            }}>
+            <option value="">Désactivé</option>
+            {virtualDevices.map(d => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+          {selectedVirtualDevice && (
+            <div style={{
+              marginTop: '8px', fontSize: '11px',
+              color: '#22c55e',
+            }}>
+              ✅ La traduction sera envoyée vers ce device — configure-le comme micro dans Discord
+            </div>
+          )}
         </div>
 
         <button

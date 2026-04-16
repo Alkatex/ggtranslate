@@ -18,6 +18,7 @@ import { app, BrowserWindow, ipcMain, session } from 'electron'
 import Store from 'electron-store'
 import { startSTTSession, sendAudioChunk, stopSTTSession } from './sttService'
 import { startOtherPlayersPipeline, stopOtherPlayersPipeline } from './services/otherPlayersPipeline'
+import { listAudioDevices, playAudioOnDevice } from './services/virtualAudioService'
 
 const store = new Store()
 const isDev = !app.isPackaged
@@ -113,4 +114,17 @@ ipcMain.handle('other-players:start', async (_event, language: string, targetLan
 ipcMain.handle('other-players:stop', async () => {
   stopOtherPlayersPipeline()
   return { success: true }
+})
+
+// ─── IPC Virtual Audio Device ─────────────────────────────────────────────────
+ipcMain.handle('virtual-audio:list-devices', async () => {
+  const devices = listAudioDevices()
+  console.log('🔊 Devices audio disponibles:', devices.map(d => d.name))
+  return devices
+})
+
+ipcMain.handle('virtual-audio:play', async (_event, deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) => {
+  const buffer = Buffer.from(pcmBuffer)
+  const success = playAudioOnDevice(deviceId, buffer, sampleRate, channels)
+  return { success }
 })

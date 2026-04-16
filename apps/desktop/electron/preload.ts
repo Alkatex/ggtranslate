@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.removeAllListeners('other-players:translated')
     },
   },
+  virtualAudio: {
+    listDevices: () => ipcRenderer.invoke('virtual-audio:list-devices'),
+    play: (deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) =>
+      ipcRenderer.invoke('virtual-audio:play', deviceId, pcmBuffer, sampleRate, channels),
+  },
 })
 
 declare global {
@@ -94,6 +99,10 @@ declare global {
         onTranscript: (callback: (data: { text: string, isFinal: boolean }) => void) => void
         onTranslated: (callback: (text: string) => void) => void
         removeListeners: () => void
+      }
+      virtualAudio: {
+        listDevices: () => Promise<Array<{ id: string, name: string }>>
+        play: (deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) => Promise<{ success: boolean }>
       }
     }
   }

@@ -9,6 +9,7 @@ export type OtherPlayersState =
 
 export interface OtherPlayersConfig {
   headsetDeviceId: string | null
+  virtualDeviceId: string | null
   sourceLang: string
   targetLang: string
   onStateChange: (state: OtherPlayersState) => void
@@ -49,7 +50,6 @@ export async function startOtherPlayers(config: OtherPlayersConfig): Promise<voi
 
   op.onTranscript(async (data) => {
     if (!current) return
-
     current.onTranscript(data.text, data.isFinal)
 
     if (data.isFinal && data.text.trim()) {
@@ -67,9 +67,12 @@ export async function startOtherPlayers(config: OtherPlayersConfig): Promise<voi
           cfg.onTranslated(translated)
           cfg.onStateChange('listening')
 
+          // Jouer sur le virtual device si configuré, sinon sur le casque
+          const outputDevice = cfg.virtualDeviceId || cfg.headsetDeviceId
+
           speakOtherPlayers(
             translated,
-            cfg.headsetDeviceId,
+            outputDevice,
             cfg.targetLang
           ).catch((err: unknown) => console.error('Erreur TTS Other Players:', err))
         }
