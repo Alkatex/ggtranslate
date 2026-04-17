@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Fond -->
+  <rect width="512" height="512" rx="80" fill="#06080f"/>
+  
+  <!-- Lueur de fond -->
+  <circle cx="256" cy="256" r="200" fill="rgba(6,182,212,0.15)"/>
+  
+  <!-- Corps manette -->
+  <path d="M140 220 C100 200 90 160 110 140 L180 130 L210 110 L302 110 L332 130 L400 140 C420 160 412 200 372 220 C380 280 360 340 320 360 C300 375 276 380 256 380 C236 380 212 375 192 360 C152 340 132 280 140 220 Z" 
+    fill="none" stroke="#06b6d4" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+  
+  <!-- Croix directionnelle -->
+  <rect x="148" y="230" width="50" height="16" rx="4" fill="#06b6d4"/>
+  <rect x="164" y="214" width="16" height="50" rx="4" fill="#06b6d4"/>
+  
+  <!-- Boutons -->
+  <circle cx="330" cy="230" r="10" fill="#22c55e"/>
+  <circle cx="356" cy="210" r="10" fill="#06b6d4"/>
+  <circle cx="356" cy="250" r="10" fill="#ef4444"/>
+  <circle cx="382" cy="230" r="10" fill="#f59e0b"/>
+  
+  <!-- Texte GG -->
+  <text x="256" y="320" font-family="Arial Black, sans-serif" font-weight="900" font-size="72" fill="#06b6d4" text-anchor="middle" dominant-baseline="middle">GG</text>
+  
+  <!-- Bordure -->
+  <rect x="3" y="3" width="506" height="506" rx="78" fill="none" stroke="#06b6d4" stroke-width="6" opacity="0.5"/>
+</svg>

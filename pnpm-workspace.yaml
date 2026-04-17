@@ -7,4 +7,6 @@ allowBuilds:
   electron: true
   es5-ext: true
   esbuild: true
+  phantomjs-prebuilt: false
+  sharp: false
   utf-8-validate: true
