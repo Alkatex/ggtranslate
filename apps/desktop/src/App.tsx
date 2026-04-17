@@ -7,6 +7,7 @@ import { TranslatePage } from './pages/Translate'
 import { GroupsPage } from './pages/Groups'
 import { PricingPage } from './pages/Pricing'
 import { LoginPage } from './pages/Login'
+import { SplashPage } from './pages/Splash'
 import { useAuthStore } from './store/auth'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -27,8 +28,11 @@ export default function App() {
       <ParticleBackground />
       <div style={{ position: 'relative', zIndex: 1 }}>
         <Routes>
+          {/* Splash screen — première page */}
+          <Route path="/" element={<SplashPage />} />
+
           {/* Routes publiques */}
-          <Route path="/" element={<HomePage />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/login" element={
             isAuthenticated
               ? <Navigate to="/translate" replace />
@@ -52,7 +56,7 @@ export default function App() {
           <Route path="*" element={
             isAuthenticated
               ? <Navigate to="/translate" replace />
-              : <Navigate to="/login" replace />
+              : <Navigate to="/" replace />
           } />
         </Routes>
       </div>
