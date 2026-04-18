@@ -6,7 +6,54 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
     "build": "tsc && vite build && electron-builder",
+    "build:win": "tsc && vite build && electron-builder --win",
     "type-check": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.ggtranslate.app",
+    "productName": "GGTranslate",
+    "copyright": "Copyright © 2026 GGTranslate",
+    "icon": "build/icon.png",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "native/loopback-capture/build/Release/*.node",
+      "native/virtual-audio-device/build/Release/*.node"
+    ],
+    "extraResources": [
+      {
+        "from": "native/loopback-capture/build/Release",
+        "to": "native/loopback-capture",
+        "filter": ["*.node"]
+      },
+      {
+        "from": "native/virtual-audio-device/build/Release",
+        "to": "native/virtual-audio-device",
+        "filter": ["*.node"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GGTranslate"
+    }
   },
   "dependencies": {
     "@deepgram/sdk": "2.4.0",
