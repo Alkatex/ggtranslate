@@ -7,3 +7,19 @@ release/
 *.log
 .DS_Store
 Thumbs.db
+
+# Build outputs
+GGTranslate.exe
+Uninstall GGTranslate.exe
+LICENSE.electron.txt
+LICENSES.chromium.html
+*.pak
+*.dll
+*.bin
+*.dat
+locales/
+resources/
+uninstallerIcon.ico
+vk_swiftshader_icd.json
+chrome_100_percent.pak
+chrome_200_percent.pak
