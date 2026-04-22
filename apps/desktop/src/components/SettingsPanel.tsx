@@ -5,11 +5,6 @@ interface AudioDevice {
   label: string
 }
 
-interface VirtualDevice {
-  id: string
-  name: string
-}
-
 interface SettingsPanelProps {
   onClose: (micDeviceId: string | null, headsetDeviceId: string | null, virtualDeviceId: string | null) => void
 }
@@ -17,7 +12,6 @@ interface SettingsPanelProps {
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [inputs, setInputs] = useState<AudioDevice[]>([])
   const [outputs, setOutputs] = useState<AudioDevice[]>([])
-  const [virtualDevices, setVirtualDevices] = useState<VirtualDevice[]>([])
   const [selectedMic, setSelectedMic] = useState('')
   const [selectedHeadset, setSelectedHeadset] = useState('')
   const [selectedVirtualDevice, setSelectedVirtualDevice] = useState('')
@@ -42,15 +36,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           .map(d => ({ deviceId: d.deviceId, label: d.label || 'Sortie inconnue' }))
         )
 
-        // Charger les devices Virtual Audio
-        try {
-          const vDevices = await window.electron.virtualAudio.listDevices()
-          setVirtualDevices(vDevices)
-        } catch (err) {
-          console.error('Erreur chargement virtual devices:', err)
-        }
-
-        // Restaurer les choix sauvegardés
         const savedMic = await window.electron.settings.get('micDeviceId') as string
         const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
         const savedVirtual = await window.electron.settings.get('virtualDeviceId') as string
@@ -110,6 +95,13 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     if (selectedVirtualDevice) window.electron.settings.set('virtualDeviceId', selectedVirtualDevice)
     onClose(selectedMic || null, selectedHeadset || null, selectedVirtualDevice || null)
   }
+
+  // Filtrer les outputs pour la sortie Discord — montrer seulement VB-Audio
+  const discordOutputs = outputs.filter(d =>
+    d.label.toLowerCase().includes('cable') ||
+    d.label.toLowerCase().includes('vb-audio') ||
+    d.label.toLowerCase().includes('virtual')
+  )
 
   return (
     <div style={{
@@ -227,7 +219,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </select>
         </div>
 
-        {/* VIRTUAL AUDIO DEVICE */}
+        {/* SORTIE VERS DISCORD */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{
             color: '#a855f7', fontSize: '11px',
@@ -250,9 +242,15 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               fontSize: '13px', cursor: 'pointer',
             }}>
             <option value="">Désactivé</option>
-            {virtualDevices.map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
+            {discordOutputs.length > 0 ? (
+              discordOutputs.map(d => (
+                <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
+              ))
+            ) : (
+              outputs.map(d => (
+                <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
+              ))
+            )}
           </select>
           {selectedVirtualDevice && (
             <div style={{
@@ -260,6 +258,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               color: '#22c55e',
             }}>
               ✅ La traduction sera envoyée vers ce device — configure-le comme micro dans Discord
+            </div>
+          )}
+          {discordOutputs.length === 0 && (
+            <div style={{
+              marginTop: '8px', fontSize: '11px',
+              color: '#f97316',
+            }}>
+              ⚠️ GGTranslate Mic non détecté — il sera installé automatiquement au prochain lancement
             </div>
           )}
         </div>

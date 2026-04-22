@@ -33,6 +33,11 @@
         "from": "native/virtual-audio-device/build/Release",
         "to": "native/virtual-audio-device",
         "filter": ["*.node"]
+      },
+      {
+        "from": "build/vbcable",
+        "to": "vbcable",
+        "filter": ["**/*"]
       }
     ],
     "win": {
@@ -52,7 +57,8 @@
       "installerHeaderIcon": "build/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "GGTranslate"
+      "shortcutName": "GGTranslate",
+      "include": "build/installer.nsh"
     }
   },
   "dependencies": {
