@@ -6,6 +6,8 @@ import { startOtherPlayers, stopOtherPlayers, OtherPlayersState } from '../lib/o
 import { useAuthStore } from '../store/auth'
 import { getAvailableLanguages } from '../lib/languages'
 import { getAvailableEffects, VoiceEffect } from '../lib/voiceEffects'
+import { translateText } from '../lib/translation'
+import { speakTranslation } from '../lib/tts'
 
 interface FeedItem {
   id: number
@@ -206,6 +208,24 @@ export function TranslatePage() {
     }
   }
 
+  const handleQuickPhrase = async (phrase: string) => {
+    const text = phrase.replace(/^\S+\s/, '')
+    try {
+      const translated = await translateText(text, sourceLang, targetLang)
+      const outputDevice = virtualDeviceId || headsetDeviceId
+      await speakTranslation(translated, outputDevice, targetLang, activeEffect)
+      setMyFeed(prev => [...prev, {
+        id: ++feedCounter,
+        original: text,
+        translated,
+        timestamp: new Date().toLocaleTimeString(),
+      }])
+      setSessionPhrases(prev => prev + 1)
+    } catch (err) {
+      console.error('Erreur phrase rapide:', err)
+    }
+  }
+
   const liveColors: Record<PipelineState, string> = {
     inactive:   '#475569',
     listening:  '#06b6d4',
@@ -321,7 +341,6 @@ export function TranslatePage() {
               Tu as traduit <strong style={{ color: '#06b6d4' }}>{sessionPhrases} phrases</strong> cette session.
               Continue sans limite avec un plan payant.
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
               <button
                 onClick={() => { setShowUpgradePopup(false); navigate('/pricing') }}
@@ -341,7 +360,6 @@ export function TranslatePage() {
                   cursor: 'pointer', fontSize: '13px',
                 }}>Continuer en Free (10 min/jour)</button>
             </div>
-
             <div style={{ color: '#475569', fontSize: '11px' }}>
               Starter à 7,99$/mois · Pro à 14,99$/mois · Annulation en 1 clic
             </div>
@@ -410,10 +428,7 @@ export function TranslatePage() {
               color: isLowTime ? '#ef4444' : '#94a3b8',
               fontSize: '12px', fontWeight: isLowTime ? 700 : 400,
             }}>
-              <span style={{
-                color: isLowTime ? '#ef4444' : '#fff',
-                fontWeight: 600,
-              }}>
+              <span style={{ color: isLowTime ? '#ef4444' : '#fff', fontWeight: 600 }}>
                 {Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}
               </span> restantes
             </div>
@@ -756,11 +771,14 @@ export function TranslatePage() {
             '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement',
             '🔴 Regroupez-vous', '⚡ On pousse',
           ].map(phrase => (
-            <button key={phrase} style={{
-              background: 'transparent', border: '1px solid #1e2d45',
-              color: '#94a3b8', padding: '6px 12px',
-              borderRadius: '8px', cursor: 'pointer', fontSize: '12px',
-            }}>{phrase}</button>
+            <button key={phrase}
+              onClick={() => handleQuickPhrase(phrase)}
+              style={{
+                background: 'transparent', border: '1px solid #1e2d45',
+                color: '#94a3b8', padding: '6px 12px',
+                borderRadius: '8px', cursor: 'pointer', fontSize: '12px',
+                transition: 'all 0.2s',
+              }}>{phrase}</button>
           ))}
         </div>
       </div>

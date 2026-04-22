@@ -91,17 +91,47 @@ async function playAudio(
   const audioBlob = await res.blob()
   const arrayBuffer = await audioBlob.arrayBuffer()
 
+  // Si pas d'effet — utiliser HTMLAudioElement avec setSinkId pour le casque
+  if (!effectId || effectId === 'normal') {
+    const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+
+    if (headsetDeviceId && 'setSinkId' in audio) {
+      try {
+        await (audio as any).setSinkId(headsetDeviceId)
+      } catch (err) {
+        console.warn('setSinkId failed:', err)
+      }
+    }
+
+    return new Promise((resolve) => {
+      audio.addEventListener('ended', () => {
+        URL.revokeObjectURL(url)
+        resolve()
+      })
+      audio.addEventListener('error', () => {
+        URL.revokeObjectURL(url)
+        resolve()
+      })
+      audio.play().catch(() => resolve())
+    })
+  }
+
+  // Avec effets DSP — utiliser AudioContext
   const audioCtx = new AudioContext()
 
   if (headsetDeviceId && 'setSinkId' in audioCtx) {
-    await (audioCtx as any).setSinkId(headsetDeviceId)
+    try {
+      await (audioCtx as any).setSinkId(headsetDeviceId)
+    } catch (err) {
+      console.warn('setSinkId AudioContext failed:', err)
+    }
   }
 
   let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
 
-  if (effectId && effectId !== 'normal') {
-    audioBuffer = await applyVoiceEffect(audioBuffer, effectId)
-  }
+  audioBuffer = await applyVoiceEffect(audioBuffer, effectId)
 
   const source = audioCtx.createBufferSource()
   source.buffer = audioBuffer
