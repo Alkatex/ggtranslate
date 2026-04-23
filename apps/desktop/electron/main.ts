@@ -14,16 +14,64 @@ for (let i = 0; i < 6; i++) {
   dir = path.dirname(dir)
 }
 
-import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { app, BrowserWindow, ipcMain, session, Menu } from 'electron'
 import Store from 'electron-store'
 import { startSTTSession, sendAudioChunk, stopSTTSession } from './sttService'
 import { startOtherPlayersPipeline, stopOtherPlayersPipeline } from './services/otherPlayersPipeline'
 import { listAudioDevices, playAudioOnDevice } from './services/virtualAudioService'
+import { execSync } from 'child_process'
 
 const store = new Store()
 const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
+
+// ─── Renommer VB-Audio en "GGTranslate Mic" ───────────────────────────────────
+function renameVBAudioDevice() {
+  if (process.platform !== 'win32') return
+
+  try {
+    // Script PowerShell pour renommer CABLE Output en GGTranslate Mic
+    const script = `
+      $deviceName = "CABLE Output (VB-Audio Virtual Cable)"
+      $newName = "GGTranslate Mic"
+      
+      # Chercher dans le registre
+      $regPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\MediaCategories"
+      
+      # Utiliser MMDevice API via COM pour renommer
+      Add-Type -TypeDefinition @"
+        using System;
+        using System.Runtime.InteropServices;
+        
+        public class AudioDeviceRenamer {
+          [DllImport("winmm.dll")]
+          public static extern int waveInGetNumDevs();
+        }
+"@
+      
+      # Méthode simple via registre audio
+      $audioReg = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\Capture"
+      if (Test-Path $audioReg) {
+        Get-ChildItem $audioReg | ForEach-Object {
+          $friendlyName = (Get-ItemProperty -Path "$($_.PSPath)\\Properties" -ErrorAction SilentlyContinue)
+          if ($friendlyName -and $friendlyName."{a45c254e-df1c-4efd-8020-67d146a850e0},2" -like "*CABLE Output*") {
+            Set-ItemProperty -Path "$($_.PSPath)\\Properties" -Name "{a45c254e-df1c-4efd-8020-67d146a850e0},2" -Value "GGTranslate Mic" -ErrorAction SilentlyContinue
+            Write-Host "✅ GGTranslate Mic configuré"
+          }
+        }
+      }
+    `
+
+    execSync(`powershell -Command "${script.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`, {
+      stdio: 'pipe',
+      timeout: 5000,
+    })
+    console.log('✅ GGTranslate Mic renommé avec succès')
+  } catch (err) {
+    console.log('⚠️ Renommage GGTranslate Mic — nécessite admin rights')
+  }
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -32,6 +80,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#06080f',
+    autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -42,6 +91,9 @@ function createWindow(): BrowserWindow {
     },
     show: false,
   })
+
+  // Supprimer le menu
+  Menu.setApplicationMenu(null)
 
   if (isDev) {
     win.loadURL('http://localhost:5173')
@@ -62,6 +114,10 @@ app.whenReady().then(() => {
       callback(allowed.includes(permission))
     }
   )
+
+  // Renommer VB-Audio en GGTranslate Mic au démarrage
+  renameVBAudioDevice()
+
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
