@@ -1,6 +1,6 @@
 import { applyVoiceEffect } from './voiceEffects'
 
-const API_URL = 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || 'https://ggtranslatebackend-production.up.railway.app'
 
 const VOICE_BY_LANG: Record<string, string> = {
   en: 'aura-2-thalia-en',
@@ -73,6 +73,42 @@ function getVoiceForLanguage(targetLang: string): string {
   return VOICE_BY_LANG[normalizedLang] || DEFAULT_VOICE
 }
 
+// Resample audio vers le sample rate cible
+async function resampleBuffer(
+  buffer: AudioBuffer,
+  targetSampleRate: number
+): Promise<AudioBuffer> {
+  if (buffer.sampleRate === targetSampleRate) return buffer
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels,
+    Math.ceil(buffer.length * targetSampleRate / buffer.sampleRate),
+    targetSampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+  source.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// Ajouter silence à la fin pour éviter coupure
+async function addSilencePadding(
+  buffer: AudioBuffer,
+  paddingSeconds: number = 0.5
+): Promise<AudioBuffer> {
+  const paddingSamples = Math.floor(paddingSeconds * buffer.sampleRate)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels,
+    buffer.length + paddingSamples,
+    buffer.sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+  source.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
 async function playAudio(
   text: string,
   headsetDeviceId: string | null,
@@ -91,7 +127,7 @@ async function playAudio(
   const audioBlob = await res.blob()
   const arrayBuffer = await audioBlob.arrayBuffer()
 
-  // Si pas d'effet — utiliser HTMLAudioElement avec setSinkId pour le casque
+  // Sans effet — HTMLAudioElement avec setSinkId
   if (!effectId || effectId === 'normal') {
     const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
     const url = URL.createObjectURL(blob)
@@ -107,8 +143,10 @@ async function playAudio(
 
     return new Promise((resolve) => {
       audio.addEventListener('ended', () => {
-        URL.revokeObjectURL(url)
-        resolve()
+        setTimeout(() => {
+          URL.revokeObjectURL(url)
+          resolve()
+        }, 400)
       })
       audio.addEventListener('error', () => {
         URL.revokeObjectURL(url)
@@ -118,8 +156,8 @@ async function playAudio(
     })
   }
 
-  // Avec effets DSP — utiliser AudioContext
-  const audioCtx = new AudioContext()
+  // Avec effets DSP — AudioContext 44100Hz pour VB-Audio
+  const audioCtx = new AudioContext({ sampleRate: 44100 })
 
   if (headsetDeviceId && 'setSinkId' in audioCtx) {
     try {
@@ -131,7 +169,16 @@ async function playAudio(
 
   let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
 
+  // Resample vers 44100Hz si nécessaire
+  if (audioBuffer.sampleRate !== 44100) {
+    audioBuffer = await resampleBuffer(audioBuffer, 44100)
+  }
+
+  // Appliquer l'effet DSP
   audioBuffer = await applyVoiceEffect(audioBuffer, effectId)
+
+  // Ajouter silence à la fin — évite la coupure
+  audioBuffer = await addSilencePadding(audioBuffer, 0.5)
 
   const source = audioCtx.createBufferSource()
   source.buffer = audioBuffer
@@ -139,8 +186,10 @@ async function playAudio(
 
   return new Promise((resolve) => {
     source.addEventListener('ended', () => {
-      audioCtx.close()
-      resolve()
+      setTimeout(() => {
+        audioCtx.close()
+        resolve()
+      }, 400)
     })
     source.start()
   })
