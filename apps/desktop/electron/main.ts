@@ -15,6 +15,7 @@ for (let i = 0; i < 6; i++) {
 }
 
 import { app, BrowserWindow, ipcMain, session, Menu } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import Store from 'electron-store'
 import { startSTTSession, sendAudioChunk, stopSTTSession } from './sttService'
 import { startOtherPlayersPipeline, stopOtherPlayersPipeline } from './services/otherPlayersPipeline'
@@ -26,48 +27,66 @@ const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 
+// ─── Auto-updater ─────────────────────────────────────────────────────────────
+function setupAutoUpdater(win: BrowserWindow) {
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('🔄 Mise à jour disponible:', info.version)
+    win.webContents.send('update:available', info.version)
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    console.log('✅ Mise à jour téléchargée')
+    win.webContents.send('update:downloaded')
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('⚠️ Auto-updater error:', err.message)
+  })
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('🔍 Vérification des mises à jour...')
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('✅ App à jour')
+  })
+
+  // Vérifier au démarrage
+  autoUpdater.checkForUpdates()
+
+  // Vérifier toutes les 30 minutes
+  setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000)
+}
+
+// ─── IPC Auto-update ──────────────────────────────────────────────────────────
+ipcMain.handle('update:install', () => {
+  autoUpdater.quitAndInstall()
+})
+
 // ─── Renommer VB-Audio en "GGTranslate Mic" ───────────────────────────────────
 function renameVBAudioDevice() {
   if (process.platform !== 'win32') return
 
   try {
-    // Script PowerShell pour renommer CABLE Output en GGTranslate Mic
     const script = `
       $deviceName = "CABLE Output (VB-Audio Virtual Cable)"
       $newName = "GGTranslate Mic"
-      
-      # Chercher dans le registre
-      $regPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\MediaCategories"
-      
-      # Utiliser MMDevice API via COM pour renommer
-      Add-Type -TypeDefinition @"
-        using System;
-        using System.Runtime.InteropServices;
-        
-        public class AudioDeviceRenamer {
-          [DllImport("winmm.dll")]
-          public static extern int waveInGetNumDevs();
-        }
-"@
-      
-      # Méthode simple via registre audio
       $audioReg = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\Capture"
       if (Test-Path $audioReg) {
         Get-ChildItem $audioReg | ForEach-Object {
           $friendlyName = (Get-ItemProperty -Path "$($_.PSPath)\\Properties" -ErrorAction SilentlyContinue)
           if ($friendlyName -and $friendlyName."{a45c254e-df1c-4efd-8020-67d146a850e0},2" -like "*CABLE Output*") {
             Set-ItemProperty -Path "$($_.PSPath)\\Properties" -Name "{a45c254e-df1c-4efd-8020-67d146a850e0},2" -Value "GGTranslate Mic" -ErrorAction SilentlyContinue
-            Write-Host "✅ GGTranslate Mic configuré"
           }
         }
       }
     `
-
     execSync(`powershell -Command "${script.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`, {
-      stdio: 'pipe',
-      timeout: 5000,
+      stdio: 'pipe', timeout: 5000,
     })
-    console.log('✅ GGTranslate Mic renommé avec succès')
   } catch (err) {
     console.log('⚠️ Renommage GGTranslate Mic — nécessite admin rights')
   }
@@ -92,7 +111,6 @@ function createWindow(): BrowserWindow {
     show: false,
   })
 
-  // Supprimer le menu
   Menu.setApplicationMenu(null)
 
   if (isDev) {
@@ -115,10 +133,13 @@ app.whenReady().then(() => {
     }
   )
 
-  // Renommer VB-Audio en GGTranslate Mic au démarrage
   renameVBAudioDevice()
-
   createWindow()
+
+  if (!isDev) {
+    setupAutoUpdater(mainWindow!)
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

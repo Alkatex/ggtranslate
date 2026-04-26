@@ -17,6 +17,12 @@
     "directories": {
       "output": "release"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "Alkatex",
+      "repo": "ggtranslate",
+      "private": true
+    },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -27,32 +33,24 @@
       {
         "from": "native/loopback-capture/build/Release",
         "to": "native/loopback-capture",
-        "filter": [
-          "*.node"
-        ]
+        "filter": ["*.node"]
       },
       {
         "from": "native/virtual-audio-device/build/Release",
         "to": "native/virtual-audio-device",
-        "filter": [
-          "*.node"
-        ]
+        "filter": ["*.node"]
       },
       {
         "from": "build/vbcable",
         "to": "vbcable",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "icon": "build/icon.ico"
@@ -74,6 +72,7 @@
     "@supabase/supabase-js": "^2.103.0",
     "dotenv": "^17.4.1",
     "electron-store": "^10.0.0",
+    "electron-updater": "^6.8.3",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.26.0",

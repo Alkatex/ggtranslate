@@ -13,6 +13,19 @@ contextBridge.exposeInMainWorld('electron', {
   audio: {
     requestPermission: () => ipcRenderer.invoke('audio:requestPermission'),
   },
+  updater: {
+    install: () => ipcRenderer.invoke('update:install'),
+    onUpdateAvailable: (callback: (version: string) => void) => {
+      ipcRenderer.on('update:available', (_event, version) => callback(version))
+    },
+    onUpdateDownloaded: (callback: () => void) => {
+      ipcRenderer.on('update:downloaded', () => callback())
+    },
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('update:available')
+      ipcRenderer.removeAllListeners('update:downloaded')
+    },
+  },
   stt: {
     start: (language: string) => ipcRenderer.invoke('stt:start', language),
     stop: () => ipcRenderer.invoke('stt:stop'),
@@ -80,6 +93,12 @@ declare global {
       }
       audio: {
         requestPermission: () => Promise<boolean>
+      }
+      updater: {
+        install: () => Promise<void>
+        onUpdateAvailable: (callback: (version: string) => void) => void
+        onUpdateDownloaded: (callback: () => void) => void
+        removeListeners: () => void
       }
       stt: {
         start: (language: string) => Promise<{ success: boolean }>

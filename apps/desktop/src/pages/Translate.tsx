@@ -9,7 +9,7 @@ import { getAvailableEffects, VoiceEffect, applyVoiceEffect } from '../lib/voice
 import { translateText } from '../lib/translation'
 import { speakTranslation } from '../lib/tts'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://ggtranslatebackend-production.up.railway.app'
+const API_URL = 'https://ggtranslatebackend-production.up.railway.app'
 
 interface FeedItem {
   id: number
@@ -49,6 +49,10 @@ export function TranslatePage() {
   const [sessionPhrases, setSessionPhrases] = useState(0)
   const [showSessionBadge, setShowSessionBadge] = useState(false)
   const [showUpgradePopup, setShowUpgradePopup] = useState(false)
+
+  // Auto-update
+  const [updateDownloaded, setUpdateDownloaded] = useState(false)
+  const [updateVersion, setUpdateVersion] = useState('')
 
   const pipelineRef = useRef<TranslationPipeline | null>(null)
   const myFeedRef = useRef<HTMLDivElement>(null)
@@ -113,6 +117,17 @@ export function TranslatePage() {
     }
   }, [sessionPhrases])
 
+  // Auto-update listeners
+  useEffect(() => {
+    window.electron.updater?.onUpdateAvailable((version: string) => {
+      setUpdateVersion(version)
+    })
+    window.electron.updater?.onUpdateDownloaded(() => {
+      setUpdateDownloaded(true)
+    })
+    return () => window.electron.updater?.removeListeners()
+  }, [])
+
   const swapLanguages = () => {
     setSourceLang(targetLang)
     setTargetLang(sourceLang)
@@ -122,61 +137,47 @@ export function TranslatePage() {
     e.stopPropagation()
     if (!canUseFeature('voiceEffects')) return
     if (previewingEffect === effect.id) return
-  
+
     setPreviewingEffect(effect.id)
     try {
       const sampleText = targetLang === 'fr' ? 'Bonjour ceci est un test' : 'Hello this is a test'
       const voice = targetLang === 'fr' ? 'aura-2-agathe-fr' : 'aura-2-thalia-en'
-  
+
       const res = await fetch(`${API_URL}/ai/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: sampleText, voice, targetLang }),
       })
-  
+
       if (!res.ok) throw new Error('TTS failed')
-  
+
       const blob = await res.blob()
       const arrayBuffer = await blob.arrayBuffer()
-  
+
       if (effect.id === 'normal') {
         const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
         const url = URL.createObjectURL(audioBlob)
         const audio = new Audio(url)
         if (headsetDeviceId && headsetDeviceId !== 'default' && 'setSinkId' in audio) {
-          try {
-            await (audio as any).setSinkId(headsetDeviceId)
-          } catch (err) {
-            console.warn('setSinkId failed:', err)
-          }
+          try { await (audio as any).setSinkId(headsetDeviceId) } catch {}
         }
-        audio.addEventListener('ended', () => {
-          URL.revokeObjectURL(url)
-          setPreviewingEffect(null)
-        })
+        audio.addEventListener('ended', () => { URL.revokeObjectURL(url); setPreviewingEffect(null) })
         await audio.play()
         return
       }
-  
+
       const audioCtx = new AudioContext()
       if (headsetDeviceId && headsetDeviceId !== 'default' && 'setSinkId' in audioCtx) {
-        try {
-          await (audioCtx as any).setSinkId(headsetDeviceId)
-        } catch (err) {
-          console.warn('setSinkId AudioContext failed:', err)
-        }
+        try { await (audioCtx as any).setSinkId(headsetDeviceId) } catch {}
       }
-  
+
       let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
       audioBuffer = await applyVoiceEffect(audioBuffer, effect.id)
-  
+
       const source = audioCtx.createBufferSource()
       source.buffer = audioBuffer
       source.connect(audioCtx.destination)
-      source.addEventListener('ended', () => {
-        audioCtx.close()
-        setPreviewingEffect(null)
-      })
+      source.addEventListener('ended', () => { audioCtx.close(); setPreviewingEffect(null) })
       source.start()
     } catch (err) {
       console.error('Preview error:', err)
@@ -401,6 +402,25 @@ export function TranslatePage() {
         </div>
       </div>
 
+      {/* BANNIÈRE AUTO-UPDATE */}
+      {updateDownloaded && (
+        <div style={{
+          background: 'rgba(34,197,94,0.1)', border: '1px solid #22c55e',
+          borderRadius: '10px', padding: '12px 16px', marginBottom: '16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ color: '#22c55e', fontSize: '13px' }}>
+            🚀 Mise à jour {updateVersion} prête à installer
+          </span>
+          <button onClick={() => window.electron.updater.install()} style={{
+            background: '#22c55e', border: 'none', color: '#fff',
+            padding: '6px 14px', borderRadius: '6px',
+            cursor: 'pointer', fontSize: '12px',
+            fontFamily: 'Orbitron, sans-serif',
+          }}>Installer →</button>
+        </div>
+      )}
+
       {/* PLAN STATUS */}
       <div style={{
         background: '#0d1424', border: `1px solid ${isLowTime ? 'rgba(239,68,68,0.5)' : '#1e2d45'}`,
@@ -528,7 +548,6 @@ export function TranslatePage() {
             </div>
           )}
 
-          {/* GRILLE EFFETS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: '8px' }}>
             {filteredEffects.map((effect: VoiceEffect) => {
               const isActive = activeEffect === effect.id
@@ -536,49 +555,31 @@ export function TranslatePage() {
               const effectLocked = !canUseFeature('voiceEffects')
 
               return (
-                <div
-                  key={effect.id}
-                  className="effect-card"
-                  onClick={() => !effectLocked && setActiveEffect(effect.id)}
-                  style={{
-                    position: 'relative',
-                    background: isActive ? 'rgba(6,182,212,0.15)' : '#111827',
-                    border: `1px solid ${isActive ? '#06b6d4' : '#1e2d45'}`,
-                    borderRadius: '12px', padding: '10px 6px 8px',
-                    cursor: effectLocked ? 'not-allowed' : 'pointer',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                    transition: 'all 0.2s',
-                    opacity: effectLocked ? 0.4 : 1,
-                    boxShadow: isActive ? '0 0 12px rgba(6,182,212,0.2)' : 'none',
-                  }}
-                >
+                <div key={effect.id} className="effect-card" onClick={() => !effectLocked && setActiveEffect(effect.id)} style={{
+                  position: 'relative',
+                  background: isActive ? 'rgba(6,182,212,0.15)' : '#111827',
+                  border: `1px solid ${isActive ? '#06b6d4' : '#1e2d45'}`,
+                  borderRadius: '12px', padding: '10px 6px 8px',
+                  cursor: effectLocked ? 'not-allowed' : 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                  transition: 'all 0.2s', opacity: effectLocked ? 0.4 : 1,
+                  boxShadow: isActive ? '0 0 12px rgba(6,182,212,0.2)' : 'none',
+                }}>
                   <div style={{ fontSize: '20px', lineHeight: 1 }}>{effect.emoji}</div>
-                  <div style={{
-                    color: isActive ? '#06b6d4' : '#94a3b8',
-                    fontSize: '10px', textAlign: 'center',
-                    fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.05em', lineHeight: 1.2,
-                  }}>{effect.name}</div>
-
-                  {isActive && (
-                    <div style={{ position: 'absolute', top: '4px', right: '4px', width: '6px', height: '6px', background: '#06b6d4', borderRadius: '50%' }}/>
-                  )}
-
+                  <div style={{ color: isActive ? '#06b6d4' : '#94a3b8', fontSize: '10px', textAlign: 'center', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.05em', lineHeight: 1.2 }}>{effect.name}</div>
+                  {isActive && <div style={{ position: 'absolute', top: '4px', right: '4px', width: '6px', height: '6px', background: '#06b6d4', borderRadius: '50%' }}/>}
                   {!effectLocked && effect.id !== 'normal' && (
-                    <button
-                      className="preview-btn"
-                      onClick={(e) => previewEffect(effect, e)}
-                      style={{
-                        position: 'absolute', bottom: '-4px', right: '-4px',
-                        width: '20px', height: '20px',
-                        background: isPreviewing ? '#06b6d4' : '#1e2d45',
-                        border: `1px solid ${isPreviewing ? '#06b6d4' : '#334155'}`,
-                        borderRadius: '50%', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '8px', color: '#fff',
-                        opacity: isPreviewing ? 1 : 0,
-                        transition: 'all 0.2s', zIndex: 2,
-                      }}
-                    >
+                    <button className="preview-btn" onClick={(e) => previewEffect(effect, e)} style={{
+                      position: 'absolute', bottom: '-4px', right: '-4px',
+                      width: '20px', height: '20px',
+                      background: isPreviewing ? '#06b6d4' : '#1e2d45',
+                      border: `1px solid ${isPreviewing ? '#06b6d4' : '#334155'}`,
+                      borderRadius: '50%', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '8px', color: '#fff',
+                      opacity: isPreviewing ? 1 : 0,
+                      transition: 'all 0.2s', zIndex: 2,
+                    }}>
                       {isPreviewing ? (
                         <div style={{ width: '8px', height: '8px', border: '1.5px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/>
                       ) : '▶'}
