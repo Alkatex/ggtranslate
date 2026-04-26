@@ -14,7 +14,7 @@ for (let i = 0; i < 6; i++) {
   dir = path.dirname(dir)
 }
 
-import { app, BrowserWindow, ipcMain, session, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, session, Menu, screen } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import Store from 'electron-store'
 import { startSTTSession, sendAudioChunk, stopSTTSession } from './sttService'
@@ -26,6 +26,7 @@ const store = new Store()
 const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
+let overlayWindow: BrowserWindow | null = null
 
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
 function setupAutoUpdater(win: BrowserWindow) {
@@ -54,10 +55,7 @@ function setupAutoUpdater(win: BrowserWindow) {
     console.log('✅ App à jour')
   })
 
-  // Vérifier au démarrage
   autoUpdater.checkForUpdates()
-
-  // Vérifier toutes les 30 minutes
   setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000)
 }
 
@@ -66,14 +64,86 @@ ipcMain.handle('update:install', () => {
   autoUpdater.quitAndInstall()
 })
 
-// ─── Renommer VB-Audio en "GGTranslate Mic" ───────────────────────────────────
+// ─── Overlay ──────────────────────────────────────────────────────────────────
+function createOverlayWindow() {
+  if (overlayWindow) {
+    overlayWindow.show()
+    overlayWindow.focus()
+    return
+  }
+
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+
+  overlayWindow = new BrowserWindow({
+    width: 320,
+    height: 200,
+    x: width - 340,
+    y: 20,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  })
+
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
+  overlayWindow.setVisibleOnAllWorkspaces(true)
+
+  if (isDev) {
+    overlayWindow.loadURL('http://localhost:5173/#/overlay')
+  } else {
+    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
+      hash: '/overlay',
+    })
+  }
+
+  overlayWindow.on('closed', () => {
+    overlayWindow = null
+  })
+}
+
+function closeOverlayWindow() {
+  if (overlayWindow) {
+    overlayWindow.close()
+    overlayWindow = null
+  }
+}
+
+// ─── IPC Overlay ──────────────────────────────────────────────────────────────
+ipcMain.handle('overlay:open', () => {
+  createOverlayWindow()
+  return { success: true }
+})
+
+ipcMain.handle('overlay:close', () => {
+  closeOverlayWindow()
+  return { success: true }
+})
+
+ipcMain.handle('overlay:setPosition', (_event, x: number, y: number) => {
+  if (overlayWindow) overlayWindow.setPosition(x, y)
+  return { success: true }
+})
+
+// Envoyer les traductions à l'overlay en temps réel
+ipcMain.on('overlay:translation', (_event, data) => {
+  if (overlayWindow) {
+    overlayWindow.webContents.send('overlay:translation', data)
+  }
+})
+
+// ─── Renommer VB-Audio ────────────────────────────────────────────────────────
 function renameVBAudioDevice() {
   if (process.platform !== 'win32') return
-
   try {
     const script = `
-      $deviceName = "CABLE Output (VB-Audio Virtual Cable)"
-      $newName = "GGTranslate Mic"
       $audioReg = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\Capture"
       if (Test-Path $audioReg) {
         Get-ChildItem $audioReg | ForEach-Object {

@@ -8,6 +8,7 @@ import { GroupsPage } from './pages/Groups'
 import { PricingPage } from './pages/Pricing'
 import { LoginPage } from './pages/Login'
 import { SplashPage } from './pages/Splash'
+import { OverlayPage } from './pages/Overlay'
 import { useAuthStore } from './store/auth'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,9 @@ export default function App() {
       <ParticleBackground />
       <div style={{ position: 'relative', zIndex: 1 }}>
         <Routes>
+          {/* Overlay — fenêtre flottante par-dessus le jeu */}
+          <Route path="/overlay" element={<OverlayPage />} />
+
           {/* Splash screen — première page */}
           <Route path="/" element={<SplashPage />} />
 

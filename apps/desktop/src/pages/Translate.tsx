@@ -50,7 +50,6 @@ export function TranslatePage() {
   const [showSessionBadge, setShowSessionBadge] = useState(false)
   const [showUpgradePopup, setShowUpgradePopup] = useState(false)
 
-  // Auto-update
   const [updateDownloaded, setUpdateDownloaded] = useState(false)
   const [updateVersion, setUpdateVersion] = useState('')
 
@@ -117,7 +116,6 @@ export function TranslatePage() {
     }
   }, [sessionPhrases])
 
-  // Auto-update listeners
   useEffect(() => {
     window.electron.updater?.onUpdateAvailable((version: string) => {
       setUpdateVersion(version)
@@ -397,6 +395,7 @@ export function TranslatePage() {
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
+          <button onClick={() => window.electron.overlay.open()} title="Mode overlay" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>⧉</button>
           <button onClick={() => navigate('/groups')} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>Groupes</button>
           <button onClick={() => navigate('/pricing')} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>Plans</button>
         </div>
@@ -415,8 +414,7 @@ export function TranslatePage() {
           <button onClick={() => window.electron.updater.install()} style={{
             background: '#22c55e', border: 'none', color: '#fff',
             padding: '6px 14px', borderRadius: '6px',
-            cursor: 'pointer', fontSize: '12px',
-            fontFamily: 'Orbitron, sans-serif',
+            cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif',
           }}>Installer →</button>
         </div>
       )}

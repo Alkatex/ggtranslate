@@ -26,6 +26,16 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.removeAllListeners('update:downloaded')
     },
   },
+  overlay: {
+    open: () => ipcRenderer.invoke('overlay:open'),
+    close: () => ipcRenderer.invoke('overlay:close'),
+    onTranslation: (callback: (data: any) => void) => {
+      ipcRenderer.on('overlay:translation', (_event, data) => callback(data))
+    },
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('overlay:translation')
+    },
+  },
   stt: {
     start: (language: string) => ipcRenderer.invoke('stt:start', language),
     stop: () => ipcRenderer.invoke('stt:stop'),
@@ -98,6 +108,12 @@ declare global {
         install: () => Promise<void>
         onUpdateAvailable: (callback: (version: string) => void) => void
         onUpdateDownloaded: (callback: () => void) => void
+        removeListeners: () => void
+      }
+      overlay: {
+        open: () => Promise<void>
+        close: () => Promise<void>
+        onTranslation: (callback: (data: any) => void) => void
         removeListeners: () => void
       }
       stt: {
