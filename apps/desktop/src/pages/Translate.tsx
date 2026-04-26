@@ -9,7 +9,7 @@ import { getAvailableEffects, VoiceEffect, applyVoiceEffect } from '../lib/voice
 import { translateText } from '../lib/translation'
 import { speakTranslation } from '../lib/tts'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || 'https://ggtranslatebackend-production.up.railway.app'
 
 interface FeedItem {
   id: number
@@ -122,29 +122,33 @@ export function TranslatePage() {
     e.stopPropagation()
     if (!canUseFeature('voiceEffects')) return
     if (previewingEffect === effect.id) return
-
+  
     setPreviewingEffect(effect.id)
     try {
       const sampleText = targetLang === 'fr' ? 'Bonjour ceci est un test' : 'Hello this is a test'
       const voice = targetLang === 'fr' ? 'aura-2-agathe-fr' : 'aura-2-thalia-en'
-
+  
       const res = await fetch(`${API_URL}/ai/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: sampleText, voice, targetLang }),
       })
-
+  
       if (!res.ok) throw new Error('TTS failed')
-
+  
       const blob = await res.blob()
       const arrayBuffer = await blob.arrayBuffer()
-
+  
       if (effect.id === 'normal') {
         const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
         const url = URL.createObjectURL(audioBlob)
         const audio = new Audio(url)
-        if (headsetDeviceId && 'setSinkId' in audio) {
-          await (audio as any).setSinkId(headsetDeviceId)
+        if (headsetDeviceId && headsetDeviceId !== 'default' && 'setSinkId' in audio) {
+          try {
+            await (audio as any).setSinkId(headsetDeviceId)
+          } catch (err) {
+            console.warn('setSinkId failed:', err)
+          }
         }
         audio.addEventListener('ended', () => {
           URL.revokeObjectURL(url)
@@ -153,15 +157,19 @@ export function TranslatePage() {
         await audio.play()
         return
       }
-
+  
       const audioCtx = new AudioContext()
-      if (headsetDeviceId && 'setSinkId' in audioCtx) {
-        await (audioCtx as any).setSinkId(headsetDeviceId)
+      if (headsetDeviceId && headsetDeviceId !== 'default' && 'setSinkId' in audioCtx) {
+        try {
+          await (audioCtx as any).setSinkId(headsetDeviceId)
+        } catch (err) {
+          console.warn('setSinkId AudioContext failed:', err)
+        }
       }
-
+  
       let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
       audioBuffer = await applyVoiceEffect(audioBuffer, effect.id)
-
+  
       const source = audioCtx.createBufferSource()
       source.buffer = audioBuffer
       source.connect(audioCtx.destination)
