@@ -2,7 +2,6 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 import * as fs from 'fs'
 
-// Cherche le .env en remontant depuis __dirname
 let dir = __dirname
 for (let i = 0; i < 6; i++) {
   const envPath = path.join(dir, '.env')
@@ -27,6 +26,157 @@ const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
+let gameDetectionInterval: ReturnType<typeof setInterval> | null = null
+let lastDetectedGame: string | null = null
+
+// ─── Jeux supportés ───────────────────────────────────────────────────────────
+const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
+  'valorant': {
+    name: 'Valorant',
+    emoji: '🎯',
+    phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Défendez le site', '💣 Spike posé', '🔍 Clear !'],
+  },
+  'csgo': {
+    name: 'CS2',
+    emoji: '💣',
+    phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'],
+  },
+  'cs2': {
+    name: 'CS2',
+    emoji: '💣',
+    phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'],
+  },
+  'leagueoflegends': {
+    name: 'League of Legends',
+    emoji: '⚔️',
+    phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'],
+  },
+  'riotclientservices': {
+    name: 'League of Legends',
+    emoji: '⚔️',
+    phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'],
+  },
+  'fortnite': {
+    name: 'Fortnite',
+    emoji: '🏗️',
+    phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'],
+  },
+  'fortniteclient': {
+    name: 'Fortnite',
+    emoji: '🏗️',
+    phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'],
+  },
+  'warzone': {
+    name: 'Warzone',
+    emoji: '🪂',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '🚗 Véhicule', '🪂 Gulag'],
+  },
+  'cod': {
+    name: 'Call of Duty',
+    emoji: '🔫',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
+  },
+  'overwatch': {
+    name: 'Overwatch 2',
+    emoji: '🦸',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'],
+  },
+  'overwatch2': {
+    name: 'Overwatch 2',
+    emoji: '🦸',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'],
+  },
+  'apexlegends': {
+    name: 'Apex Legends',
+    emoji: '⚡',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'],
+  },
+  'r5apex': {
+    name: 'Apex Legends',
+    emoji: '⚡',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'],
+  },
+  'pubg': {
+    name: 'PUBG',
+    emoji: '🐔',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On loot', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Zone', '🚗 Véhicule', '🏠 On entre'],
+  },
+  'dota2': {
+    name: 'Dota 2',
+    emoji: '🏰',
+    phrases: ['🎯 Ennemi repéré', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🐉 Roshan bientôt', '💀 Attention', '🗼 Défendez'],
+  },
+  'minecraft': {
+    name: 'Minecraft',
+    emoji: '⛏️',
+    phrases: ['🏃 Suivez-moi', '⛏️ On mine', '🏠 On build', '✅ Bien joué', '💀 Attention mob', '🌙 Nuit bientôt', '🔴 Danger'],
+  },
+  'rocketleague': {
+    name: 'Rocket League',
+    emoji: '🚗',
+    phrases: ['🎯 Shot !', '🚗 Centering', '✅ Bien joué', '🔴 Defend', '⚡ Boost', '💨 Fast', '🏆 GG'],
+  },
+}
+
+const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse']
+
+// ─── Détection du jeu ─────────────────────────────────────────────────────────
+function detectActiveGame(): string | null {
+  if (process.platform !== 'win32') return null
+  try {
+    const output = execSync('powershell -Command "Get-Process | Select-Object -ExpandProperty Name"', {
+      stdio: 'pipe', timeout: 3000, encoding: 'utf8',
+    })
+    const processes = output.toLowerCase().split('\n').map(p => p.trim())
+    for (const [processName] of Object.entries(SUPPORTED_GAMES)) {
+      if (processes.some(p => p.includes(processName.toLowerCase()))) {
+        return processName
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function startGameDetection() {
+  if (gameDetectionInterval) return
+  gameDetectionInterval = setInterval(() => {
+    const detectedGame = detectActiveGame()
+    if (detectedGame !== lastDetectedGame) {
+      lastDetectedGame = detectedGame
+      const gameInfo = detectedGame ? SUPPORTED_GAMES[detectedGame] : null
+      if (mainWindow) {
+        mainWindow.webContents.send('game:detected', {
+          game: gameInfo ? gameInfo.name : null,
+          emoji: gameInfo ? gameInfo.emoji : null,
+          phrases: gameInfo ? gameInfo.phrases : DEFAULT_PHRASES,
+          processName: detectedGame,
+        })
+      }
+      console.log(detectedGame ? `🎮 Jeu détecté: ${gameInfo?.name}` : '🎮 Aucun jeu détecté')
+    }
+  }, 5000)
+}
+
+function stopGameDetection() {
+  if (gameDetectionInterval) {
+    clearInterval(gameDetectionInterval)
+    gameDetectionInterval = null
+  }
+}
+
+// ─── IPC Game Detection ───────────────────────────────────────────────────────
+ipcMain.handle('game:detect', () => {
+  const detectedGame = detectActiveGame()
+  const gameInfo = detectedGame ? SUPPORTED_GAMES[detectedGame] : null
+  return {
+    game: gameInfo ? gameInfo.name : null,
+    emoji: gameInfo ? gameInfo.emoji : null,
+    phrases: gameInfo ? gameInfo.phrases : DEFAULT_PHRASES,
+    processName: detectedGame,
+  }
+})
 
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
 function setupAutoUpdater(win: BrowserWindow) {
@@ -59,7 +209,6 @@ function setupAutoUpdater(win: BrowserWindow) {
   setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000)
 }
 
-// ─── IPC Auto-update ──────────────────────────────────────────────────────────
 ipcMain.handle('update:install', () => {
   autoUpdater.quitAndInstall()
 })
@@ -72,7 +221,7 @@ function createOverlayWindow() {
     return
   }
 
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const { width } = screen.getPrimaryDisplay().workAreaSize
 
   overlayWindow = new BrowserWindow({
     width: 320,
@@ -116,7 +265,6 @@ function closeOverlayWindow() {
   }
 }
 
-// ─── IPC Overlay ──────────────────────────────────────────────────────────────
 ipcMain.handle('overlay:open', () => {
   createOverlayWindow()
   return { success: true }
@@ -132,7 +280,6 @@ ipcMain.handle('overlay:setPosition', (_event, x: number, y: number) => {
   return { success: true }
 })
 
-// Envoyer les traductions à l'overlay en temps réel
 ipcMain.on('overlay:translation', (_event, data) => {
   if (overlayWindow) {
     overlayWindow.webContents.send('overlay:translation', data)
@@ -205,6 +352,7 @@ app.whenReady().then(() => {
 
   renameVBAudioDevice()
   createWindow()
+  startGameDetection()
 
   if (!isDev) {
     setupAutoUpdater(mainWindow!)
@@ -216,6 +364,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  stopGameDetection()
   if (process.platform !== 'darwin') app.quit()
 })
 

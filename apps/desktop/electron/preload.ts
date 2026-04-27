@@ -36,6 +36,15 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.removeAllListeners('overlay:translation')
     },
   },
+  game: {
+    detect: () => ipcRenderer.invoke('game:detect'),
+    onDetected: (callback: (data: any) => void) => {
+      ipcRenderer.on('game:detected', (_event, data) => callback(data))
+    },
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('game:detected')
+    },
+  },
   stt: {
     start: (language: string) => ipcRenderer.invoke('stt:start', language),
     stop: () => ipcRenderer.invoke('stt:stop'),
@@ -114,6 +123,11 @@ declare global {
         open: () => Promise<void>
         close: () => Promise<void>
         onTranslation: (callback: (data: any) => void) => void
+        removeListeners: () => void
+      }
+      game: {
+        detect: () => Promise<any>
+        onDetected: (callback: (data: any) => void) => void
         removeListeners: () => void
       }
       stt: {

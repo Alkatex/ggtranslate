@@ -11,6 +11,8 @@ import { speakTranslation } from '../lib/tts'
 
 const API_URL = 'https://ggtranslatebackend-production.up.railway.app'
 
+const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse']
+
 interface FeedItem {
   id: number
   original: string
@@ -52,6 +54,10 @@ export function TranslatePage() {
 
   const [updateDownloaded, setUpdateDownloaded] = useState(false)
   const [updateVersion, setUpdateVersion] = useState('')
+
+  const [detectedGame, setDetectedGame] = useState<string | null>(null)
+  const [detectedGameEmoji, setDetectedGameEmoji] = useState<string | null>(null)
+  const [quickPhrases, setQuickPhrases] = useState<string[]>(DEFAULT_PHRASES)
 
   const pipelineRef = useRef<TranslationPipeline | null>(null)
   const myFeedRef = useRef<HTMLDivElement>(null)
@@ -124,6 +130,22 @@ export function TranslatePage() {
       setUpdateDownloaded(true)
     })
     return () => window.electron.updater?.removeListeners()
+  }, [])
+
+  useEffect(() => {
+    window.electron.game?.detect().then((data: any) => {
+      if (data?.game) {
+        setDetectedGame(data.game)
+        setDetectedGameEmoji(data.emoji)
+        setQuickPhrases(data.phrases)
+      }
+    })
+    window.electron.game?.onDetected((data: any) => {
+      setDetectedGame(data.game)
+      setDetectedGameEmoji(data.emoji)
+      setQuickPhrases(data.phrases || DEFAULT_PHRASES)
+    })
+    return () => window.electron.game?.removeListeners()
   }, [])
 
   const swapLanguages = () => {
@@ -324,6 +346,10 @@ export function TranslatePage() {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        @keyframes pulse-green {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
         .effect-card:hover { border-color: #06b6d4 !important; background: rgba(6,182,212,0.08) !important; }
         .effect-card:hover .preview-btn { opacity: 1 !important; }
       `}</style>
@@ -389,10 +415,41 @@ export function TranslatePage() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '16px 0', borderBottom: '1px solid #1e2d45', marginBottom: '24px',
       }}>
-        <div>
-          <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '18px', fontWeight: 700, letterSpacing: '0.1em' }}>GG TRANSLATE</div>
-          <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.15em', marginTop: '2px' }}>TRADUCTION VOCALE GAMING</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div>
+            <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '18px', fontWeight: 700, letterSpacing: '0.1em' }}>GG TRANSLATE</div>
+            <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.15em', marginTop: '2px' }}>TRADUCTION VOCALE GAMING</div>
+          </div>
+
+          {/* BADGE JEU DÉTECTÉ */}
+          {detectedGame ? (
+            <div style={{
+              background: 'rgba(168,85,247,0.15)',
+              border: '1px solid rgba(168,85,247,0.4)',
+              borderRadius: '8px', padding: '4px 12px',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <div style={{ width: '6px', height: '6px', background: '#22c55e', borderRadius: '50%', animation: 'pulse-green 2s ease infinite' }}/>
+              <span style={{ fontSize: '14px' }}>{detectedGameEmoji}</span>
+              <span style={{ color: '#a855f7', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.05em' }}>
+                {detectedGame}
+              </span>
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(71,85,105,0.15)',
+              border: '1px solid #1e2d45',
+              borderRadius: '8px', padding: '4px 12px',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <div style={{ width: '6px', height: '6px', background: '#475569', borderRadius: '50%' }}/>
+              <span style={{ color: '#475569', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>
+                Aucun jeu
+              </span>
+            </div>
+          )}
         </div>
+
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
           <button onClick={() => window.electron.overlay.open()} title="Mode overlay" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>⧉</button>
@@ -656,9 +713,18 @@ export function TranslatePage() {
 
       {/* PHRASES RAPIDES */}
       <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '16px' }}>
-        <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em', marginBottom: '12px' }}>⚡ PHRASES RAPIDES</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em' }}>
+            ⚡ PHRASES RAPIDES
+          </div>
+          {detectedGame && (
+            <span style={{ color: '#a855f7', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>
+              {detectedGameEmoji} {detectedGame}
+            </span>
+          )}
+        </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse'].map(phrase => (
+          {quickPhrases.map(phrase => (
             <button key={phrase} onClick={() => handleQuickPhrase(phrase)} style={{
               background: 'transparent', border: '1px solid #1e2d45',
               color: '#94a3b8', padding: '6px 12px', borderRadius: '8px',
