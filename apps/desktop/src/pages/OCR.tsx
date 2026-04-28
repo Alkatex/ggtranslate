@@ -19,17 +19,12 @@ export function OCRPage() {
   const { plan } = useAuthStore()
   const LANGUAGES = getAvailableLanguages(plan)
 
-  const [isSelecting, setIsSelecting] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
-  const [zone, setZone] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [results, setResults] = useState<OCRResult[]>([])
   const [sourceLang, setSourceLang] = useState('ja')
   const [targetLang, setTargetLang] = useState('fr')
-  const [status, setStatus] = useState('Prêt')
-  const [isInitialized, setIsInitialized] = useState(false)
+  const [status, setStatus] = useState('Prêt — sélectionne une zone')
 
-  const startPos = useRef<{ x: number; y: number } | null>(null)
-  const selectionRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
   const lastTextRef = useRef('')
   const isProcessingRef = useRef(false)
@@ -40,8 +35,10 @@ export function OCRPage() {
   useEffect(() => { targetLangRef.current = targetLang }, [targetLang])
 
   useEffect(() => {
-    setStatus('Prêt — sélectionne une zone')
-    setIsInitialized(true)
+    window.electron.ocr.onCapturing((active: boolean) => {
+      setIsCapturing(active)
+      if (active) setStatus('● Capture active')
+    })
 
     window.electron.ocr.onImage(async (buffer: any) => {
       console.log('[OCR] Image reçue !', buffer?.length)
@@ -54,12 +51,22 @@ export function OCRPage() {
         const url = URL.createObjectURL(blob)
         const { data: { text } } = await (Tesseract as any).recognize(url, 'eng+fra+jpn+kor+rus+spa+deu', { logger: () => {} })
         URL.revokeObjectURL(url)
-        const clean = text.trim().replace(/\s+/g, ' ')
+
+        // Nettoyage du texte — supprime artefacts et caractères parasites
+        const clean = text
+          .trim()
+          .replace(/\s+/g, ' ')
+          .replace(/[^\w\s\u00C0-\u024F\u0400-\u04FF\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF.,!?':;«»()[\]{}\-–—/]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+
         console.log('[OCR] Texte détecté:', clean)
+
         if (!clean || clean.length < 3 || clean === lastTextRef.current) {
           setStatus('● Capture active')
           return
         }
+
         lastTextRef.current = clean
         setStatus('⟳ Traduction...')
         const translated = await translateText(clean, sourceLangRef.current, targetLangRef.current)
@@ -87,98 +94,26 @@ export function OCRPage() {
     }
   }, [results])
 
-  function startSelection() {
-    setIsSelecting(true)
-    setStatus('Clique et glisse pour sélectionner une zone')
-  }
-
-  function handleMouseDown(e: React.MouseEvent) {
-    if (!isSelecting) return
-    startPos.current = { x: e.clientX, y: e.clientY }
-    if (selectionRef.current) {
-      selectionRef.current.style.left = `${e.clientX}px`
-      selectionRef.current.style.top = `${e.clientY}px`
-      selectionRef.current.style.width = '0px'
-      selectionRef.current.style.height = '0px'
-      selectionRef.current.style.display = 'block'
-    }
-  }
-
-  function handleMouseMove(e: React.MouseEvent) {
-    if (!isSelecting || !startPos.current || !selectionRef.current) return
-    const x = Math.min(e.clientX, startPos.current.x)
-    const y = Math.min(e.clientY, startPos.current.y)
-    const w = Math.abs(e.clientX - startPos.current.x)
-    const h = Math.abs(e.clientY - startPos.current.y)
-    selectionRef.current.style.left = `${x}px`
-    selectionRef.current.style.top = `${y}px`
-    selectionRef.current.style.width = `${w}px`
-    selectionRef.current.style.height = `${h}px`
-  }
-
-  async function handleMouseUp(e: React.MouseEvent) {
-    if (!isSelecting || !startPos.current) return
-
-    const x = Math.min(e.clientX, startPos.current.x)
-    const y = Math.min(e.clientY, startPos.current.y)
-    const w = Math.abs(e.clientX - startPos.current.x)
-    const h = Math.abs(e.clientY - startPos.current.y)
-
-    if (selectionRef.current) selectionRef.current.style.display = 'none'
-
-    if (w < 20 || h < 20) {
-      setIsSelecting(false)
-      setStatus('Zone trop petite — réessaie')
-      return
-    }
-
-    const scale = window.devicePixelRatio || 1
-    const newZone = {
-      x: Math.round(x * scale),
-      y: Math.round(y * scale),
-      width: Math.round(w * scale),
-      height: Math.round(h * scale),
-    }
-
-    setZone(newZone)
-    setIsSelecting(false)
-    startPos.current = null
-    await startCapture(newZone)
-  }
-
-  async function startCapture(z: typeof zone) {
-    if (!z) return
-    setIsCapturing(true)
-    setStatus('● Capture active')
-    await window.electron.ocr.start(z)
+  async function openSelection() {
+    await window.electron.ocr.openSelection()
+    setStatus('Sélectionne une zone sur l\'écran...')
   }
 
   async function stopCapture() {
     await window.electron.ocr.stop()
     setIsCapturing(false)
-    setZone(null)
     lastTextRef.current = ''
     setStatus('Prêt — sélectionne une zone')
   }
 
   return (
-    <div
-      style={{
-        position: 'relative', zIndex: 1,
-        minHeight: '100vh', padding: '0 24px 24px',
-        maxWidth: '800px', margin: '0 auto',
-        cursor: isSelecting ? 'crosshair' : 'default',
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-    >
-      <div ref={selectionRef} style={{
-        position: 'fixed', display: 'none',
-        border: '2px solid #06b6d4',
-        background: 'rgba(6,182,212,0.1)',
-        pointerEvents: 'none', zIndex: 999,
-      }}/>
+    <div style={{
+      position: 'relative', zIndex: 1,
+      minHeight: '100vh', padding: '0 24px 24px',
+      maxWidth: '800px', margin: '0 auto',
+      userSelect: 'none',
+    }}>
+      <style>{`* { -webkit-user-select: none !important; user-select: none !important; }`}</style>
 
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #1e2d45', marginBottom: '24px' }}>
@@ -213,23 +148,15 @@ export function OCRPage() {
           <div style={{ color: isCapturing ? '#22c55e' : '#475569', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>{status}</div>
         </div>
 
-        {zone && (
-          <div style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.3)', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '11px', color: '#06b6d4' }}>
-            Zone: {zone.x}x{zone.y} — {zone.width}×{zone.height}px
-          </div>
-        )}
-
         <div style={{ display: 'flex', gap: '10px' }}>
           {!isCapturing ? (
-            <button onClick={startSelection} disabled={!isInitialized || isSelecting} style={{
+            <button onClick={openSelection} style={{
               flex: 1,
-              background: isSelecting ? 'rgba(6,182,212,0.2)' : 'linear-gradient(to right, #3b82f6, #06b6d4)',
+              background: 'linear-gradient(to right, #3b82f6, #06b6d4)',
               border: 'none', color: '#fff', padding: '12px', borderRadius: '8px',
-              cursor: isInitialized && !isSelecting ? 'pointer' : 'not-allowed',
-              fontSize: '13px', fontFamily: 'Orbitron, sans-serif',
-              opacity: isInitialized ? 1 : 0.5,
+              cursor: 'pointer', fontSize: '13px', fontFamily: 'Orbitron, sans-serif',
             }}>
-              {isSelecting ? '⊹ Sélectionne une zone...' : '⊹ Sélectionner une zone'}
+              ⊹ Sélectionner une zone
             </button>
           ) : (
             <button onClick={stopCapture} style={{
@@ -246,11 +173,9 @@ export function OCRPage() {
           }}>🗑️</button>
         </div>
 
-        {isSelecting && (
-          <div style={{ marginTop: '12px', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)', borderRadius: '8px', padding: '10px', color: '#06b6d4', fontSize: '12px', textAlign: 'center' }}>
-            Clique et glisse sur la zone à traduire — ex: le chat du jeu, les menus, les sous-titres
-          </div>
-        )}
+        <div style={{ marginTop: '12px', color: '#475569', fontSize: '11px', textAlign: 'center' }}>
+          Une fenêtre s'ouvrira pour sélectionner la zone sur n'importe quel écran — se ferme en 15s
+        </div>
       </div>
 
       {/* RÉSULTATS */}

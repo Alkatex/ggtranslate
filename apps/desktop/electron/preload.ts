@@ -50,11 +50,19 @@ contextBridge.exposeInMainWorld('electron', {
     start: (zone: { x: number; y: number; width: number; height: number }) =>
       ipcRenderer.invoke('ocr:start', zone),
     stop: () => ipcRenderer.invoke('ocr:stop'),
+    openSelection: () => ipcRenderer.invoke('ocr:openSelection'),
+    closeSelection: () => ipcRenderer.invoke('ocr:closeSelection'),
+    zoneSelected: (zone: { x: number; y: number; width: number; height: number }) =>
+      ipcRenderer.invoke('ocr:zoneSelected', zone),
     onImage: (callback: (buffer: any) => void) => {
       ipcRenderer.on('ocr:image', (_event, buffer) => callback(buffer))
     },
+    onCapturing: (callback: (active: boolean) => void) => {
+      ipcRenderer.on('ocr:capturing', (_event, active) => callback(active))
+    },
     removeListeners: () => {
       ipcRenderer.removeAllListeners('ocr:image')
+      ipcRenderer.removeAllListeners('ocr:capturing')
     },
   },
   stt: {
@@ -146,7 +154,11 @@ declare global {
         init: () => Promise<void>
         start: (zone: { x: number; y: number; width: number; height: number }) => Promise<void>
         stop: () => Promise<void>
+        openSelection: () => Promise<void>
+        closeSelection: () => Promise<void>
+        zoneSelected: (zone: { x: number; y: number; width: number; height: number }) => Promise<void>
         onImage: (callback: (buffer: any) => void) => void
+        onCapturing: (callback: (active: boolean) => void) => void
         removeListeners: () => void
       }
       stt: {

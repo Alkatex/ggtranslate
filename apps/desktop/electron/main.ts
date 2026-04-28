@@ -27,10 +27,10 @@ const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
+let selectionWindow: BrowserWindow | null = null
 let gameDetectionInterval: ReturnType<typeof setInterval> | null = null
 let lastDetectedGame: string | null = null
 
-// ─── Jeux supportés ───────────────────────────────────────────────────────────
 const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
   'valorant': {
     name: 'Valorant', emoji: '🎯',
@@ -104,7 +104,6 @@ const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: st
 
 const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse']
 
-// ─── Détection du jeu ─────────────────────────────────────────────────────────
 function detectActiveGame(): string | null {
   if (process.platform !== 'win32') return null
   try {
@@ -150,7 +149,6 @@ function stopGameDetection() {
   }
 }
 
-// ─── IPC Game Detection ───────────────────────────────────────────────────────
 ipcMain.handle('game:detect', () => {
   const detectedGame = detectActiveGame()
   const gameInfo = detectedGame ? SUPPORTED_GAMES[detectedGame] : null
@@ -162,33 +160,18 @@ ipcMain.handle('game:detect', () => {
   }
 })
 
-// ─── Auto-updater ─────────────────────────────────────────────────────────────
 function setupAutoUpdater(win: BrowserWindow) {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
-
   autoUpdater.on('update-available', (info) => {
-    console.log('🔄 Mise à jour disponible:', info.version)
     win.webContents.send('update:available', info.version)
   })
-
   autoUpdater.on('update-downloaded', () => {
-    console.log('✅ Mise à jour téléchargée')
     win.webContents.send('update:downloaded')
   })
-
   autoUpdater.on('error', (err) => {
     console.error('⚠️ Auto-updater error:', err.message)
   })
-
-  autoUpdater.on('checking-for-update', () => {
-    console.log('🔍 Vérification des mises à jour...')
-  })
-
-  autoUpdater.on('update-not-available', () => {
-    console.log('✅ App à jour')
-  })
-
   autoUpdater.checkForUpdates()
   setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000)
 }
@@ -197,88 +180,108 @@ ipcMain.handle('update:install', () => {
   autoUpdater.quitAndInstall()
 })
 
-// ─── Overlay ──────────────────────────────────────────────────────────────────
 function createOverlayWindow() {
-  if (overlayWindow) {
-    overlayWindow.show()
-    overlayWindow.focus()
-    return
-  }
-
+  if (overlayWindow) { overlayWindow.show(); overlayWindow.focus(); return }
   const { width } = screen.getPrimaryDisplay().workAreaSize
-
   overlayWindow = new BrowserWindow({
-    width: 320,
-    height: 200,
-    x: width - 340,
-    y: 20,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    resizable: true,
-    hasShadow: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
+    width: 320, height: 200, x: width - 340, y: 20,
+    frame: false, transparent: true, alwaysOnTop: true,
+    skipTaskbar: true, resizable: true, hasShadow: false,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
   })
-
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
   overlayWindow.setVisibleOnAllWorkspaces(true)
-
   if (isDev) {
     overlayWindow.loadURL('http://localhost:5173/#/overlay')
   } else {
-    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
-      hash: '/overlay',
-    })
+    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/overlay' })
   }
-
-  overlayWindow.on('closed', () => {
-    overlayWindow = null
-  })
+  overlayWindow.on('closed', () => { overlayWindow = null })
 }
 
 function closeOverlayWindow() {
-  if (overlayWindow) {
-    overlayWindow.close()
-    overlayWindow = null
-  }
+  if (overlayWindow) { overlayWindow.close(); overlayWindow = null }
 }
 
-ipcMain.handle('overlay:open', () => {
-  createOverlayWindow()
-  return { success: true }
-})
-
-ipcMain.handle('overlay:close', () => {
-  closeOverlayWindow()
-  return { success: true }
-})
-
+ipcMain.handle('overlay:open', () => { createOverlayWindow(); return { success: true } })
+ipcMain.handle('overlay:close', () => { closeOverlayWindow(); return { success: true } })
 ipcMain.handle('overlay:setPosition', (_event, x: number, y: number) => {
   if (overlayWindow) overlayWindow.setPosition(x, y)
   return { success: true }
 })
-
 ipcMain.on('overlay:translation', (_event, data) => {
-  if (overlayWindow) {
-    overlayWindow.webContents.send('overlay:translation', data)
-  }
+  if (overlayWindow) overlayWindow.webContents.send('overlay:translation', data)
 })
 
-// ─── IPC OCR ──────────────────────────────────────────────────────────────────
-ipcMain.handle('ocr:init', async () => {
-  await initOCR()
+function createSelectionWindow() {
+  if (selectionWindow) return
+  const displays = screen.getAllDisplays()
+  console.log('🖥️ Écrans détectés:', displays.map(d => `${d.bounds.x},${d.bounds.y} ${d.bounds.width}x${d.bounds.height} scale=${d.scaleFactor}`))
+  const minX = Math.min(...displays.map(d => d.bounds.x))
+  const minY = Math.min(...displays.map(d => d.bounds.y))
+  const maxX = Math.max(...displays.map(d => d.bounds.x + d.bounds.width))
+  const maxY = Math.max(...displays.map(d => d.bounds.y + d.bounds.height))
+  const totalWidth = maxX - minX
+  const totalHeight = maxY - minY
+  console.log(`🖥️ Fenêtre sélection: x=${minX} y=${minY} w=${totalWidth} h=${totalHeight}`)
+
+  selectionWindow = new BrowserWindow({
+    width: totalWidth, height: totalHeight, x: minX, y: minY,
+    frame: false, transparent: true, alwaysOnTop: true,
+    skipTaskbar: true, resizable: false, movable: false,
+    enableLargerThanScreen: true,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
+  })
+  selectionWindow.setAlwaysOnTop(true, 'screen-saver')
+  selectionWindow.setVisibleOnAllWorkspaces(true)
+  selectionWindow.setBounds({ x: minX, y: minY, width: totalWidth, height: totalHeight })
+  if (isDev) {
+    selectionWindow.loadURL('http://localhost:5173/#/ocr-select')
+  } else {
+    selectionWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/ocr-select' })
+  }
+  selectionWindow.on('closed', () => { selectionWindow = null })
+}
+
+function closeSelectionWindow() {
+  if (selectionWindow) { selectionWindow.close(); selectionWindow = null }
+}
+
+ipcMain.handle('ocr:init', async () => { await initOCR(); return { success: true } })
+
+ipcMain.handle('ocr:openSelection', () => {
+  createSelectionWindow()
+  return { success: true }
+})
+
+ipcMain.handle('ocr:closeSelection', () => {
+  closeSelectionWindow()
+  return { success: true }
+})
+
+ipcMain.handle('ocr:zoneSelected', async (_event, zone) => {
+  closeSelectionWindow()
+
+  if (mainWindow) mainWindow.hide()
+  await new Promise(resolve => setTimeout(resolve, 500))
+
+  if (mainWindow) {
+    mainWindow.show()
+    mainWindow.webContents.send('ocr:capturing', true)
+  }
+
+  console.log('[OCR] Zone absolue sélectionnée:', zone)
+
+  await startCapture(zone, (buffer) => {
+    console.log('[OCR] Envoi image au renderer, taille:', buffer.length)
+    if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
+  })
+
   return { success: true }
 })
 
 ipcMain.handle('ocr:start', async (_event, zone: { x: number; y: number; width: number; height: number }) => {
   await startCapture(zone, (buffer) => {
-    console.log('[OCR] Envoi image au renderer, taille:', buffer.length)
     if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
   })
   return { success: true }
@@ -289,7 +292,6 @@ ipcMain.handle('ocr:stop', () => {
   return { success: true }
 })
 
-// ─── Renommer VB-Audio ────────────────────────────────────────────────────────
 function renameVBAudioDevice() {
   if (process.platform !== 'win32') return
   try {
@@ -314,53 +316,36 @@ function renameVBAudioDevice() {
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
-    backgroundColor: '#06080f',
-    autoHideMenuBar: true,
+    width: 1280, height: 800, minWidth: 900, minHeight: 600,
+    backgroundColor: '#06080f', autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      experimentalFeatures: true,
+      contextIsolation: true, nodeIntegration: false,
+      sandbox: false, experimentalFeatures: true,
     },
     show: false,
   })
-
   Menu.setApplicationMenu(null)
-
   if (isDev) {
     win.loadURL('http://localhost:5173')
     win.webContents.openDevTools({ mode: 'detach' })
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'))
   }
-
   win.once('ready-to-show', () => win.show())
   mainWindow = win
   return win
 }
 
 app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
-      const allowed = ['media', 'audioCapture', 'desktopCapture']
-      callback(allowed.includes(permission))
-    }
-  )
-
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(['media', 'audioCapture', 'desktopCapture'].includes(permission))
+  })
   renameVBAudioDevice()
   createWindow()
   startGameDetection()
-
-  if (!isDev) {
-    setupAutoUpdater(mainWindow!)
-  }
-
+  if (!isDev) setupAutoUpdater(mainWindow!)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -372,57 +357,32 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-// ─── IPC Settings ─────────────────────────────────────────────────────────────
-ipcMain.handle('settings:get', (_event, key: string) => {
-  return store.get(key)
-})
-ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
-  store.set(key, value)
-  return true
-})
+ipcMain.handle('settings:get', (_event, key: string) => store.get(key))
+ipcMain.handle('settings:set', (_event, key: string, value: unknown) => { store.set(key, value); return true })
 ipcMain.handle('settings:getAll', () => store.store)
 ipcMain.handle('app:getVersion', () => app.getVersion())
 ipcMain.handle('app:getPlatform', () => process.platform)
 
-// ─── IPC STT ──────────────────────────────────────────────────────────────────
 ipcMain.handle('stt:start', async (_event, language: string) => {
   if (!mainWindow) throw new Error('Fenêtre non disponible')
   await startSTTSession(mainWindow, language)
   return { success: true }
 })
+ipcMain.handle('stt:stop', async () => { stopSTTSession(); return { success: true } })
+ipcMain.on('stt:sendChunk', (_event, chunk: ArrayBuffer) => { sendAudioChunk(Buffer.from(chunk)) })
 
-ipcMain.handle('stt:stop', async () => {
-  stopSTTSession()
-  return { success: true }
-})
-
-ipcMain.on('stt:sendChunk', (_event, chunk: ArrayBuffer) => {
-  sendAudioChunk(Buffer.from(chunk))
-})
-
-// ─── IPC Other Players ────────────────────────────────────────────────────────
 ipcMain.handle('other-players:start', async (_event, language: string, targetLang: string) => {
   if (!mainWindow) throw new Error('Fenêtre non disponible')
-  await startOtherPlayersPipeline({
-    win: mainWindow,
-    language,
-    targetLang,
-  })
+  await startOtherPlayersPipeline({ win: mainWindow, language, targetLang })
   return { success: true }
 })
+ipcMain.handle('other-players:stop', async () => { stopOtherPlayersPipeline(); return { success: true } })
 
-ipcMain.handle('other-players:stop', async () => {
-  stopOtherPlayersPipeline()
-  return { success: true }
-})
-
-// ─── IPC Virtual Audio Device ─────────────────────────────────────────────────
 ipcMain.handle('virtual-audio:list-devices', async () => {
   const devices = listAudioDevices()
   console.log('🔊 Devices audio disponibles:', devices.map(d => d.name))
   return devices
 })
-
 ipcMain.handle('virtual-audio:play', async (_event, deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) => {
   const buffer = Buffer.from(pcmBuffer)
   const success = playAudioOnDevice(deviceId, buffer, sampleRate, channels)
