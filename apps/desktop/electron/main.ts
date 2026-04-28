@@ -19,6 +19,7 @@ import Store from 'electron-store'
 import { startSTTSession, sendAudioChunk, stopSTTSession } from './sttService'
 import { startOtherPlayersPipeline, stopOtherPlayersPipeline } from './services/otherPlayersPipeline'
 import { listAudioDevices, playAudioOnDevice } from './services/virtualAudioService'
+import { initOCR, startCapture, stopCapture, destroyOCR } from './services/ocrService'
 import { execSync } from 'child_process'
 
 const store = new Store()
@@ -32,88 +33,71 @@ let lastDetectedGame: string | null = null
 // ─── Jeux supportés ───────────────────────────────────────────────────────────
 const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
   'valorant': {
-    name: 'Valorant',
-    emoji: '🎯',
+    name: 'Valorant', emoji: '🎯',
     phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Défendez le site', '💣 Spike posé', '🔍 Clear !'],
   },
   'csgo': {
-    name: 'CS2',
-    emoji: '💣',
+    name: 'CS2', emoji: '💣',
     phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'],
   },
   'cs2': {
-    name: 'CS2',
-    emoji: '💣',
+    name: 'CS2', emoji: '💣',
     phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'],
   },
   'leagueoflegends': {
-    name: 'League of Legends',
-    emoji: '⚔️',
+    name: 'League of Legends', emoji: '⚔️',
     phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'],
   },
   'riotclientservices': {
-    name: 'League of Legends',
-    emoji: '⚔️',
+    name: 'League of Legends', emoji: '⚔️',
     phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'],
   },
   'fortnite': {
-    name: 'Fortnite',
-    emoji: '🏗️',
+    name: 'Fortnite', emoji: '🏗️',
     phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'],
   },
   'fortniteclient': {
-    name: 'Fortnite',
-    emoji: '🏗️',
+    name: 'Fortnite', emoji: '🏗️',
     phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'],
   },
   'warzone': {
-    name: 'Warzone',
-    emoji: '🪂',
+    name: 'Warzone', emoji: '🪂',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '🚗 Véhicule', '🪂 Gulag'],
   },
   'cod': {
-    name: 'Call of Duty',
-    emoji: '🔫',
+    name: 'Call of Duty', emoji: '🔫',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
   },
   'overwatch': {
-    name: 'Overwatch 2',
-    emoji: '🦸',
+    name: 'Overwatch 2', emoji: '🦸',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'],
   },
   'overwatch2': {
-    name: 'Overwatch 2',
-    emoji: '🦸',
+    name: 'Overwatch 2', emoji: '🦸',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'],
   },
   'apexlegends': {
-    name: 'Apex Legends',
-    emoji: '⚡',
+    name: 'Apex Legends', emoji: '⚡',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'],
   },
   'r5apex': {
-    name: 'Apex Legends',
-    emoji: '⚡',
+    name: 'Apex Legends', emoji: '⚡',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'],
   },
   'pubg': {
-    name: 'PUBG',
-    emoji: '🐔',
+    name: 'PUBG', emoji: '🐔',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On loot', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Zone', '🚗 Véhicule', '🏠 On entre'],
   },
   'dota2': {
-    name: 'Dota 2',
-    emoji: '🏰',
+    name: 'Dota 2', emoji: '🏰',
     phrases: ['🎯 Ennemi repéré', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🐉 Roshan bientôt', '💀 Attention', '🗼 Défendez'],
   },
   'minecraft': {
-    name: 'Minecraft',
-    emoji: '⛏️',
+    name: 'Minecraft', emoji: '⛏️',
     phrases: ['🏃 Suivez-moi', '⛏️ On mine', '🏠 On build', '✅ Bien joué', '💀 Attention mob', '🌙 Nuit bientôt', '🔴 Danger'],
   },
   'rocketleague': {
-    name: 'Rocket League',
-    emoji: '🚗',
+    name: 'Rocket League', emoji: '🚗',
     phrases: ['🎯 Shot !', '🚗 Centering', '✅ Bien joué', '🔴 Defend', '⚡ Boost', '💨 Fast', '🏆 GG'],
   },
 }
@@ -286,6 +270,25 @@ ipcMain.on('overlay:translation', (_event, data) => {
   }
 })
 
+// ─── IPC OCR ──────────────────────────────────────────────────────────────────
+ipcMain.handle('ocr:init', async () => {
+  await initOCR()
+  return { success: true }
+})
+
+ipcMain.handle('ocr:start', async (_event, zone: { x: number; y: number; width: number; height: number }) => {
+  await startCapture(zone, (buffer) => {
+    console.log('[OCR] Envoi image au renderer, taille:', buffer.length)
+    if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
+  })
+  return { success: true }
+})
+
+ipcMain.handle('ocr:stop', () => {
+  stopCapture()
+  return { success: true }
+})
+
 // ─── Renommer VB-Audio ────────────────────────────────────────────────────────
 function renameVBAudioDevice() {
   if (process.platform !== 'win32') return
@@ -365,6 +368,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   stopGameDetection()
+  destroyOCR()
   if (process.platform !== 'darwin') app.quit()
 })
 

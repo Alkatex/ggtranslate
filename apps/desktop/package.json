@@ -33,24 +33,32 @@
       {
         "from": "native/loopback-capture/build/Release",
         "to": "native/loopback-capture",
-        "filter": ["*.node"]
+        "filter": [
+          "*.node"
+        ]
       },
       {
         "from": "native/virtual-audio-device/build/Release",
         "to": "native/virtual-audio-device",
-        "filter": ["*.node"]
+        "filter": [
+          "*.node"
+        ]
       },
       {
         "from": "build/vbcable",
         "to": "vbcable",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico"
@@ -76,7 +84,9 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.26.0",
+    "screenshot-desktop": "^1.15.4",
     "soundtouchjs": "^0.3.0",
+    "tesseract.js": "4.1.4",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

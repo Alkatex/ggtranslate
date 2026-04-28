@@ -45,6 +45,18 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.removeAllListeners('game:detected')
     },
   },
+  ocr: {
+    init: () => ipcRenderer.invoke('ocr:init'),
+    start: (zone: { x: number; y: number; width: number; height: number }) =>
+      ipcRenderer.invoke('ocr:start', zone),
+    stop: () => ipcRenderer.invoke('ocr:stop'),
+    onImage: (callback: (buffer: any) => void) => {
+      ipcRenderer.on('ocr:image', (_event, buffer) => callback(buffer))
+    },
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('ocr:image')
+    },
+  },
   stt: {
     start: (language: string) => ipcRenderer.invoke('stt:start', language),
     stop: () => ipcRenderer.invoke('stt:stop'),
@@ -128,6 +140,13 @@ declare global {
       game: {
         detect: () => Promise<any>
         onDetected: (callback: (data: any) => void) => void
+        removeListeners: () => void
+      }
+      ocr: {
+        init: () => Promise<void>
+        start: (zone: { x: number; y: number; width: number; height: number }) => Promise<void>
+        stop: () => Promise<void>
+        onImage: (callback: (buffer: any) => void) => void
         removeListeners: () => void
       }
       stt: {

@@ -9,6 +9,7 @@ import { PricingPage } from './pages/Pricing'
 import { LoginPage } from './pages/Login'
 import { SplashPage } from './pages/Splash'
 import { OverlayPage } from './pages/Overlay'
+import { OCRPage } from './pages/OCR'
 import { useAuthStore } from './store/auth'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,9 @@ export default function App() {
           {/* Overlay — fenêtre flottante par-dessus le jeu */}
           <Route path="/overlay" element={<OverlayPage />} />
 
+          {/* OCR — capture et traduction de texte à l'écran */}
+          <Route path="/ocr" element={<OCRPage />} />
+
           {/* Splash screen — première page */}
           <Route path="/" element={<SplashPage />} />
 
@@ -54,6 +58,11 @@ export default function App() {
           <Route path="/groups" element={
             <ProtectedRoute>
               <GroupsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/ocr-protected" element={
+            <ProtectedRoute>
+              <OCRPage />
             </ProtectedRoute>
           } />
 
