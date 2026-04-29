@@ -5,9 +5,8 @@ export interface Theme {
   id: string
   name: string
   emoji: string
-  hue: number
   filter: string
-  bgStyle: 'particles' | 'matrix' | 'grid' | 'aurora' | 'minimal' | 'ghost'
+  bgStyle: 'cyber' | 'matrix' | 'grid' | 'aurora' | 'minimal' | 'ghost' | 'blood' | 'sunset'
   description: string
 }
 
@@ -16,17 +15,15 @@ export const THEMES: Theme[] = [
     id: 'cyber',
     name: 'Cyber',
     emoji: '🔵',
-    hue: 0,
     filter: 'none',
-    bgStyle: 'particles',
+    bgStyle: 'cyber',
     description: 'Le style original — cyan sur fond sombre',
   },
   {
     id: 'clean',
     name: 'Clean',
     emoji: '🩶',
-    hue: 0,
-    filter: 'hue-rotate(230deg) saturate(0.7) brightness(0.95)',
+    filter: 'none',
     bgStyle: 'minimal',
     description: 'Style Discord — blurple, gris foncé, propre',
   },
@@ -34,8 +31,7 @@ export const THEMES: Theme[] = [
     id: 'neon',
     name: 'Neon',
     emoji: '🟢',
-    hue: 80,
-    filter: 'hue-rotate(80deg)',
+    filter: 'none',
     bgStyle: 'matrix',
     description: 'Matrix vibes — pluie de code vert',
   },
@@ -43,17 +39,15 @@ export const THEMES: Theme[] = [
     id: 'blood',
     name: 'Blood',
     emoji: '🔴',
-    hue: 180,
-    filter: 'hue-rotate(180deg)',
-    bgStyle: 'particles',
-    description: 'FPS hardcore — rouge sang',
+    filter: 'none',
+    bgStyle: 'blood',
+    description: 'FPS hardcore — rouge sang intense',
   },
   {
     id: 'aurora',
     name: 'Aurora',
     emoji: '🟣',
-    hue: 200,
-    filter: 'hue-rotate(200deg)',
+    filter: 'none',
     bgStyle: 'aurora',
     description: 'Aurore boréale — vagues violettes et bleues',
   },
@@ -61,17 +55,15 @@ export const THEMES: Theme[] = [
     id: 'sunset',
     name: 'Sunset',
     emoji: '🟠',
-    hue: -40,
-    filter: 'hue-rotate(-40deg)',
-    bgStyle: 'particles',
-    description: 'Coucher de soleil — orange chaleureux',
+    filter: 'none',
+    bgStyle: 'sunset',
+    description: 'Coucher de soleil — orange et rose chaud',
   },
   {
     id: 'ghost',
     name: 'Ghost',
     emoji: '👻',
-    hue: 0,
-    filter: 'grayscale(0.8) brightness(1.1)',
+    filter: 'none',
     bgStyle: 'ghost',
     description: 'Minimaliste — noir et blanc épuré',
   },
@@ -79,8 +71,7 @@ export const THEMES: Theme[] = [
     id: 'pro',
     name: 'Pro',
     emoji: '⚡',
-    hue: 180,
-    filter: 'hue-rotate(180deg)',
+    filter: 'none',
     bgStyle: 'grid',
     description: 'Grille tech — indigo professionnel',
   },
