@@ -4,6 +4,19 @@ import { useAuthStore } from '../store/auth'
 import { supabase } from '../lib/supabase'
 import { getAvailableLanguages } from '../lib/languages'
 
+const AVATARS = [
+  { id: 0, emoji: '🎮', bg: 'linear-gradient(135deg, #3b82f6, #06b6d4)', label: 'Gamer' },
+  { id: 1, emoji: '🔫', bg: 'linear-gradient(135deg, #ef4444, #f97316)', label: 'Sniper' },
+  { id: 2, emoji: '🛡️', bg: 'linear-gradient(135deg, #6366f1, #8b5cf6)', label: 'Tank' },
+  { id: 3, emoji: '⚡', bg: 'linear-gradient(135deg, #f59e0b, #eab308)', label: 'Speedrun' },
+  { id: 4, emoji: '🧙', bg: 'linear-gradient(135deg, #8b5cf6, #a855f7)', label: 'Mage' },
+  { id: 5, emoji: '🏹', bg: 'linear-gradient(135deg, #22c55e, #16a34a)', label: 'Archer' },
+  { id: 6, emoji: '🤖', bg: 'linear-gradient(135deg, #06b6d4, #0891b2)', label: 'Robot' },
+  { id: 7, emoji: '🐉', bg: 'linear-gradient(135deg, #dc2626, #9333ea)', label: 'Dragon' },
+  { id: 8, emoji: '👾', bg: 'linear-gradient(135deg, #ec4899, #f43f5e)', label: 'Alien' },
+  { id: 9, emoji: '🦊', bg: 'linear-gradient(135deg, #f97316, #ef4444)', label: 'Renard' },
+]
+
 export function ProfilePage() {
   const navigate = useNavigate()
   const { user, plan } = useAuthStore()
@@ -12,6 +25,8 @@ export function ProfilePage() {
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
   const [mainLanguage, setMainLanguage] = useState('fr')
+  const [avatarId, setAvatarId] = useState(0)
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const [totalPhrases, setTotalPhrases] = useState(0)
@@ -19,6 +34,7 @@ export function ProfilePage() {
 
   const planColor = plan === 'pro' ? '#a855f7' : plan === 'starter' ? '#3b82f6' : plan === 'trial' ? '#06b6d4' : '#64748b'
   const planLabel = plan === 'pro' ? '⚡ PRO' : plan === 'starter' ? '🚀 STARTER' : plan === 'trial' ? '⭐ TRIAL' : '🆓 FREE'
+  const currentAvatar = AVATARS[avatarId] || AVATARS[0]
 
   useEffect(() => {
     loadProfile()
@@ -36,6 +52,7 @@ export function ProfilePage() {
       setUsername(data.username || '')
       setBio(data.bio || '')
       setMainLanguage(data.main_language || 'fr')
+      setAvatarId(data.avatar_id || 0)
       setTotalPhrases(data.total_phrases || 0)
       setTotalSessions(data.total_sessions || 0)
     }
@@ -53,6 +70,7 @@ export function ProfilePage() {
         username: username.trim() || null,
         bio: bio.trim() || null,
         main_language: mainLanguage,
+        avatar_id: avatarId,
       })
 
     setIsSaving(false)
@@ -70,6 +88,14 @@ export function ProfilePage() {
       minHeight: '100vh', padding: '0 24px 24px',
       maxWidth: '800px', margin: '0 auto',
     }}>
+      <style>{`
+        @keyframes pop {
+          0% { transform: scale(0.8); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .avatar-option:hover { transform: scale(1.1); border-color: #06b6d4 !important; }
+      `}</style>
+
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #1e2d45', marginBottom: '24px' }}>
         <div>
@@ -79,46 +105,107 @@ export function ProfilePage() {
         <button onClick={() => navigate('/translate')} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '13px' }}>← Traducteur</button>
       </div>
 
-      {/* AVATAR + PLAN */}
+      {/* AVATAR + INFO */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '16px', padding: '24px', marginBottom: '20px' }}>
-        <div style={{
-          width: '72px', height: '72px', borderRadius: '50%',
-          background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '28px', flexShrink: 0,
-        }}>
-          🎮
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div
+            onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+            style={{
+              width: '80px', height: '80px', borderRadius: '50%',
+              background: currentAvatar.bg,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '36px', cursor: 'pointer',
+              border: '3px solid rgba(6,182,212,0.4)',
+              transition: 'all 0.2s',
+              boxShadow: '0 0 20px rgba(6,182,212,0.2)',
+            }}
+          >
+            {currentAvatar.emoji}
+          </div>
+          <div style={{
+            position: 'absolute', bottom: '-4px', right: '-4px',
+            background: '#06b6d4', borderRadius: '50%',
+            width: '22px', height: '22px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '11px', cursor: 'pointer', border: '2px solid #06080f',
+          }} onClick={() => setShowAvatarPicker(!showAvatarPicker)}>
+            ✏️
+          </div>
         </div>
+
         <div style={{ flex: 1 }}>
           <div style={{ color: '#fff', fontSize: '18px', fontWeight: 700, fontFamily: 'Orbitron, sans-serif', marginBottom: '4px' }}>
             {username || user?.email?.split('@')[0] || 'Joueur'}
           </div>
           <div style={{ color: '#475569', fontSize: '12px', marginBottom: '8px' }}>{user?.email}</div>
-          <span style={{ background: `${planColor}22`, color: planColor, padding: '3px 10px', borderRadius: '99px', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', border: `1px solid ${planColor}44` }}>
-            {planLabel}
-          </span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ background: `${planColor}22`, color: planColor, padding: '3px 10px', borderRadius: '99px', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', border: `1px solid ${planColor}44` }}>
+              {planLabel}
+            </span>
+            <span style={{ color: '#475569', fontSize: '11px' }}>{currentAvatar.label}</span>
+          </div>
         </div>
       </div>
+
+      {/* AVATAR PICKER */}
+      {showAvatarPicker && (
+        <div style={{
+          background: '#0d1424', border: '1px solid #1e2d45',
+          borderRadius: '16px', padding: '20px', marginBottom: '20px',
+          animation: 'pop 0.2s ease',
+        }}>
+          <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em', marginBottom: '16px' }}>
+            🎭 CHOISIS TON AVATAR
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+            {AVATARS.map(avatar => (
+              <div
+                key={avatar.id}
+                className="avatar-option"
+                onClick={() => { setAvatarId(avatar.id); setShowAvatarPicker(false) }}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}
+              >
+                <div style={{
+                  width: '56px', height: '56px', borderRadius: '50%',
+                  background: avatar.bg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '28px',
+                  border: `2px solid ${avatarId === avatar.id ? '#06b6d4' : 'transparent'}`,
+                  boxShadow: avatarId === avatar.id ? '0 0 12px rgba(6,182,212,0.5)' : 'none',
+                  transition: 'all 0.2s',
+                }}>
+                  {avatar.emoji}
+                </div>
+                <span style={{ color: avatarId === avatar.id ? '#06b6d4' : '#475569', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>
+                  {avatar.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* STATS */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
         <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
           <div style={{ color: '#06b6d4', fontSize: '28px', fontWeight: 700, fontFamily: 'Orbitron, sans-serif' }}>{totalPhrases}</div>
-          <div style={{ color: '#475569', fontSize: '11px', marginTop: '4px' }}>Phrases traduites</div>
+          <div style={{ color: '#475569', fontSize: '11px', marginTop: '4px' }}>🗣️ Phrases traduites</div>
         </div>
         <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
           <div style={{ color: '#a855f7', fontSize: '28px', fontWeight: 700, fontFamily: 'Orbitron, sans-serif' }}>{totalSessions}</div>
-          <div style={{ color: '#475569', fontSize: '11px', marginTop: '4px' }}>Sessions jouées</div>
+          <div style={{ color: '#475569', fontSize: '11px', marginTop: '4px' }}>🎮 Sessions jouées</div>
         </div>
       </div>
 
       {/* FORMULAIRE */}
-      <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '16px', padding: '24px', marginBottom: '20px' }}>
+      <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '16px', padding: '24px' }}>
         <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em', marginBottom: '20px' }}>
           ✏️ MODIFIER MON PROFIL
         </div>
 
-        {/* USERNAME */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '8px' }}>Pseudo</div>
           <input
@@ -135,7 +222,6 @@ export function ProfilePage() {
           <div style={{ color: '#334155', fontSize: '10px', marginTop: '4px' }}>{username.length}/30</div>
         </div>
 
-        {/* BIO */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '8px' }}>Bio</div>
           <textarea
@@ -154,7 +240,6 @@ export function ProfilePage() {
           <div style={{ color: '#334155', fontSize: '10px', marginTop: '4px' }}>{bio.length}/150</div>
         </div>
 
-        {/* LANGUE PRINCIPALE */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '8px' }}>Langue principale</div>
           <select
@@ -170,7 +255,6 @@ export function ProfilePage() {
           </select>
         </div>
 
-        {/* SAVE */}
         <button
           onClick={saveProfile}
           disabled={isSaving}
