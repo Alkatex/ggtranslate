@@ -17,6 +17,7 @@ interface Group {
   owner_id: string
   max_members: number
   created_at: string
+  last_activity_at?: string
   member_count?: number
   languages?: string[]
 }
@@ -74,12 +75,14 @@ export function GroupsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadPublicGroups()
     loadMyGroups()
+    cleanInactiveGroups()
   }, [])
 
   useEffect(() => {
@@ -90,23 +93,18 @@ export function GroupsPage() {
 
   useEffect(() => {
     if (!activeGroup) return
-
     loadActiveMembers(activeGroup.id)
     loadMessages(activeGroup.id)
 
     const channel = supabase
       .channel(`group:${activeGroup.id}`)
       .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
+        event: '*', schema: 'public',
         table: 'group_members',
         filter: `group_id=eq.${activeGroup.id}`,
-      }, () => {
-        loadActiveMembers(activeGroup.id)
-      })
+      }, () => loadActiveMembers(activeGroup.id))
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
+        event: 'INSERT', schema: 'public',
         table: 'group_messages',
         filter: `group_id=eq.${activeGroup.id}`,
       }, (payload) => {
@@ -114,10 +112,28 @@ export function GroupsPage() {
       })
       .subscribe()
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return () => { supabase.removeChannel(channel) }
   }, [activeGroup])
+
+  // Nettoyer les groupes inactifs depuis 3 jours
+  async function cleanInactiveGroups() {
+    const threeDaysAgo = new Date()
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+
+    const { data: inactiveGroups } = await supabase
+      .from('groups')
+      .select('id')
+      .lt('last_activity_at', threeDaysAgo.toISOString())
+
+    if (inactiveGroups && inactiveGroups.length > 0) {
+      for (const group of inactiveGroups) {
+        await supabase.from('group_members').delete().eq('group_id', group.id)
+        await supabase.from('group_messages').delete().eq('group_id', group.id)
+        await supabase.from('groups').delete().eq('id', group.id)
+      }
+      console.log(`🧹 ${inactiveGroups.length} groupes inactifs supprimés`)
+    }
+  }
 
   async function loadPublicGroups() {
     const { data } = await supabase
@@ -133,12 +149,10 @@ export function GroupsPage() {
           .from('group_members')
           .select('*', { count: 'exact', head: true })
           .eq('group_id', g.id)
-
         const { data: members } = await supabase
           .from('group_members')
           .select('language')
           .eq('group_id', g.id)
-
         const langs = members ? [...new Set(members.map(m => m.language))] : []
         return { ...g, member_count: count || 0, languages: langs }
       }))
@@ -152,7 +166,6 @@ export function GroupsPage() {
       .from('group_members')
       .select('group_id, groups(*)')
       .eq('user_id', user.id)
-
     if (data) {
       const groups = data.map((d: any) => d.groups).filter(Boolean)
       setMyGroups(groups)
@@ -188,6 +201,10 @@ export function GroupsPage() {
       type: 'text',
       display_name: displayName,
     })
+    // Mettre à jour last_activity_at
+    await supabase.from('groups')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('id', activeGroup.id)
     setNewMessage('')
   }
 
@@ -195,9 +212,7 @@ export function GroupsPage() {
     if (!groupName.trim() || !user) return
     setLoading(true)
     setError('')
-
     const code = generateCode(groupName)
-
     const { data: group, error: groupError } = await supabase
       .from('groups')
       .insert({
@@ -206,6 +221,7 @@ export function GroupsPage() {
         is_public: isPublic,
         owner_id: user.id,
         max_members: 8,
+        last_activity_at: new Date().toISOString(),
       })
       .select()
       .single()
@@ -264,11 +280,41 @@ export function GroupsPage() {
       })
     }
 
+    // Mettre à jour last_activity_at
+    await supabase.from('groups')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('id', group.id)
+
     setActiveGroup(group)
     setJoinCode('')
     setShowJoin(false)
     setSuccess(`✅ Rejoint ${group.name} !`)
     loadMyGroups()
+    setLoading(false)
+  }
+
+  async function deleteGroup(groupId: string) {
+    if (!user) return
+    setLoading(true)
+
+    // Supprimer membres, messages, puis groupe
+    await supabase.from('group_members').delete().eq('group_id', groupId)
+    await supabase.from('group_messages').delete().eq('group_id', groupId)
+    const { error } = await supabase.from('groups').delete().eq('id', groupId)
+
+    if (error) {
+      setError('Erreur lors de la suppression')
+    } else {
+      setSuccess('🗑️ Groupe supprimé')
+      if (activeGroup?.id === groupId) {
+        setActiveGroup(null)
+        setActiveMembers([])
+        setMessages([])
+      }
+      loadPublicGroups()
+      loadMyGroups()
+    }
+    setConfirmDelete(null)
     setLoading(false)
   }
 
@@ -279,7 +325,6 @@ export function GroupsPage() {
       .delete()
       .eq('group_id', activeGroup.id)
       .eq('user_id', user.id)
-
     setActiveGroup(null)
     setActiveMembers([])
     setMessages([])
@@ -295,6 +340,12 @@ export function GroupsPage() {
 
   function formatTime(timestamp: string) {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function daysInactive(lastActivity?: string) {
+    if (!lastActivity) return 0
+    const diff = Date.now() - new Date(lastActivity).getTime()
+    return Math.floor(diff / (1000 * 60 * 60 * 24))
   }
 
   return (
@@ -325,11 +376,45 @@ export function GroupsPage() {
         </div>
       )}
 
+      {/* CONFIRMATION SUPPRESSION */}
+      {confirmDelete && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px',
+        }}>
+          <div style={{
+            background: '#0d1424', border: '1px solid rgba(239,68,68,0.5)',
+            borderRadius: '16px', padding: '28px',
+            maxWidth: '360px', width: '100%', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🗑️</div>
+            <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '16px', marginBottom: '8px' }}>
+              Supprimer ce groupe ?
+            </div>
+            <div style={{ color: '#475569', fontSize: '13px', marginBottom: '24px' }}>
+              Tous les messages et membres seront supprimés. Cette action est irréversible.
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setConfirmDelete(null)} style={{
+                flex: 1, background: 'transparent', border: '1px solid #1e2d45',
+                color: '#475569', padding: '10px', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '13px',
+              }}>Annuler</button>
+              <button onClick={() => deleteGroup(confirmDelete)} style={{
+                flex: 1, background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444',
+                color: '#ef4444', padding: '10px', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '13px', fontFamily: 'Orbitron, sans-serif',
+              }}>Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* GROUPE ACTIF */}
       {activeGroup && (
         <div style={{ background: 'rgba(6,182,212,0.05)', border: '1px solid #06b6d4', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-
-          {/* HEADER GROUPE */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div>
               <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '14px', marginBottom: '4px' }}>
@@ -345,11 +430,20 @@ export function GroupsPage() {
                 }}>{copiedCode === activeGroup.code ? '✅ Copié' : '📋 Copier'}</button>
               </div>
             </div>
-            <button onClick={leaveGroup} style={{
-              background: 'transparent', border: '1px solid #ef4444',
-              color: '#ef4444', padding: '6px 14px', borderRadius: '8px',
-              cursor: 'pointer', fontSize: '12px',
-            }}>Quitter</button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {activeGroup.owner_id === user?.id && (
+                <button onClick={() => setConfirmDelete(activeGroup.id)} style={{
+                  background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)',
+                  color: '#ef4444', padding: '6px 12px', borderRadius: '8px',
+                  cursor: 'pointer', fontSize: '12px',
+                }}>🗑️</button>
+              )}
+              <button onClick={leaveGroup} style={{
+                background: 'transparent', border: '1px solid #ef4444',
+                color: '#ef4444', padding: '6px 14px', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '12px',
+              }}>Quitter</button>
+            </div>
           </div>
 
           {/* MEMBRES */}
@@ -428,7 +522,6 @@ export function GroupsPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* INPUT MESSAGE */}
           <div style={{ display: 'flex', gap: '8px' }}>
             <input
               value={newMessage}
@@ -473,7 +566,6 @@ export function GroupsPage() {
           border: showCreate ? 'none' : '1px solid #1e2d45',
           color: '#fff', padding: '14px', borderRadius: '10px',
           cursor: 'pointer', fontSize: '14px', fontFamily: 'Orbitron, sans-serif', fontWeight: 700,
-          transition: 'all 0.2s',
         }}>+ Créer un groupe</button>
         <button onClick={() => { setShowJoin(!showJoin); setShowCreate(false) }} style={{
           flex: 1,
@@ -481,7 +573,6 @@ export function GroupsPage() {
           border: `1px solid ${showJoin ? '#06b6d4' : '#1e2d45'}`,
           color: '#fff', padding: '14px', borderRadius: '10px',
           cursor: 'pointer', fontSize: '14px', fontFamily: 'Orbitron, sans-serif',
-          transition: 'all 0.2s',
         }}># Rejoindre par code</button>
       </div>
 
@@ -512,6 +603,9 @@ export function GroupsPage() {
               color: !isPublic ? '#06b6d4' : '#94a3b8',
               padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px',
             }}>🔒 Privé</button>
+          </div>
+          <div style={{ color: '#475569', fontSize: '11px', marginBottom: '14px' }}>
+            ⏱️ Le groupe sera automatiquement supprimé après 3 jours d'inactivité
           </div>
           <button onClick={createGroup} disabled={loading || !groupName.trim()} style={{
             width: '100%', background: 'linear-gradient(to right, #3b82f6, #06b6d4)',
@@ -552,31 +646,52 @@ export function GroupsPage() {
             ⭐ MES GROUPES
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {myGroups.map(group => (
-              <div key={group.id} style={{
-                background: activeGroup?.id === group.id ? 'rgba(6,182,212,0.1)' : '#0d1424',
-                border: `1px solid ${activeGroup?.id === group.id ? '#06b6d4' : '#1e2d45'}`,
-                borderRadius: '10px', padding: '14px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <div>
-                  <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>{group.name}</div>
-                  <div style={{ color: '#475569', fontSize: '11px', fontFamily: 'monospace' }}>{group.code}</div>
+            {myGroups.map(group => {
+              const inactive = daysInactive(group.last_activity_at)
+              const isOwner = group.owner_id === user?.id
+              return (
+                <div key={group.id} style={{
+                  background: activeGroup?.id === group.id ? 'rgba(6,182,212,0.1)' : '#0d1424',
+                  border: `1px solid ${activeGroup?.id === group.id ? '#06b6d4' : '#1e2d45'}`,
+                  borderRadius: '10px', padding: '14px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600 }}>{group.name}</div>
+                      {isOwner && <span style={{ color: '#f59e0b', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>CRÉATEUR</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                      <span style={{ color: '#475569', fontSize: '11px', fontFamily: 'monospace' }}>{group.code}</span>
+                      {inactive > 0 && (
+                        <span style={{ color: inactive >= 2 ? '#ef4444' : '#f59e0b', fontSize: '10px' }}>
+                          · {inactive}j inactif
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => copyCode(group.code)} style={{
+                      background: 'transparent', border: '1px solid #1e2d45',
+                      color: '#475569', padding: '6px 10px', borderRadius: '6px',
+                      cursor: 'pointer', fontSize: '11px',
+                    }}>{copiedCode === group.code ? '✅' : '📋'}</button>
+                    {isOwner && (
+                      <button onClick={() => setConfirmDelete(group.id)} style={{
+                        background: 'transparent', border: '1px solid rgba(239,68,68,0.3)',
+                        color: '#ef4444', padding: '6px 10px', borderRadius: '6px',
+                        cursor: 'pointer', fontSize: '11px',
+                      }}>🗑️</button>
+                    )}
+                    <button onClick={() => setActiveGroup(group)} style={{
+                      background: 'transparent', border: '1px solid #06b6d4',
+                      color: '#06b6d4', padding: '6px 14px', borderRadius: '6px',
+                      cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif',
+                    }}>Entrer</button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => copyCode(group.code)} style={{
-                    background: 'transparent', border: '1px solid #1e2d45',
-                    color: '#475569', padding: '6px 10px', borderRadius: '6px',
-                    cursor: 'pointer', fontSize: '11px',
-                  }}>{copiedCode === group.code ? '✅' : '📋'}</button>
-                  <button onClick={() => setActiveGroup(group)} style={{
-                    background: 'transparent', border: '1px solid #06b6d4',
-                    color: '#06b6d4', padding: '6px 14px', borderRadius: '6px',
-                    cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif',
-                  }}>Entrer</button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
