@@ -11,6 +11,7 @@ import { SplashPage } from './pages/Splash'
 import { OverlayPage } from './pages/Overlay'
 import { OCRPage } from './pages/OCR'
 import { OCRSelectPage } from './pages/OCRSelect'
+import { ProfilePage } from './pages/Profile'
 import { useAuthStore } from './store/auth'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -54,6 +55,9 @@ function AppRoutes() {
           } />
           <Route path="/groups" element={
             <ProtectedRoute><GroupsPage /></ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute><ProfilePage /></ProtectedRoute>
           } />
           <Route path="*" element={
             isAuthenticated
