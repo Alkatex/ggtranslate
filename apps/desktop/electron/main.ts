@@ -31,6 +31,7 @@ let selectionWindow: BrowserWindow | null = null
 let gameDetectionInterval: ReturnType<typeof setInterval> | null = null
 let lastDetectedGame: string | null = null
 
+// Processus exacts — comparaison stricte pour éviter les faux positifs
 const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
   'valorant': {
     name: 'Valorant', emoji: '🎯',
@@ -64,7 +65,7 @@ const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: st
     name: 'Warzone', emoji: '🪂',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '🚗 Véhicule', '🪂 Gulag'],
   },
-  'cod': {
+  'modernwarfare': {
     name: 'Call of Duty', emoji: '🔫',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
   },
@@ -84,7 +85,7 @@ const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: st
     name: 'Apex Legends', emoji: '⚡',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'],
   },
-  'pubg': {
+  'tslgame': {
     name: 'PUBG', emoji: '🐔',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On loot', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Zone', '🚗 Véhicule', '🏠 On entre'],
   },
@@ -92,7 +93,7 @@ const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: st
     name: 'Dota 2', emoji: '🏰',
     phrases: ['🎯 Ennemi repéré', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🐉 Roshan bientôt', '💀 Attention', '🗼 Défendez'],
   },
-  'minecraft': {
+  'javaw': {
     name: 'Minecraft', emoji: '⛏️',
     phrases: ['🏃 Suivez-moi', '⛏️ On mine', '🏠 On build', '✅ Bien joué', '💀 Attention mob', '🌙 Nuit bientôt', '🔴 Danger'],
   },
@@ -110,9 +111,11 @@ function detectActiveGame(): string | null {
     const output = execSync('powershell -Command "Get-Process | Select-Object -ExpandProperty Name"', {
       stdio: 'pipe', timeout: 3000, encoding: 'utf8',
     })
-    const processes = output.toLowerCase().split('\n').map(p => p.trim())
+    // Comparaison exacte — trim + lowercase + sans extension
+    const processes = output.split('\n').map(p => p.trim().toLowerCase().replace(/\.exe$/, ''))
+
     for (const [processName] of Object.entries(SUPPORTED_GAMES)) {
-      if (processes.some(p => p.includes(processName.toLowerCase()))) {
+      if (processes.some(p => p === processName.toLowerCase())) {
         return processName
       }
     }
@@ -261,22 +264,17 @@ ipcMain.handle('ocr:closeSelection', () => {
 
 ipcMain.handle('ocr:zoneSelected', async (_event, zone) => {
   closeSelectionWindow()
-
   if (mainWindow) mainWindow.hide()
   await new Promise(resolve => setTimeout(resolve, 500))
-
   if (mainWindow) {
     mainWindow.show()
     mainWindow.webContents.send('ocr:capturing', true)
   }
-
   console.log('[OCR] Zone absolue sélectionnée:', zone)
-
   await startCapture(zone, (buffer) => {
     console.log('[OCR] Envoi image au renderer, taille:', buffer.length)
     if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
   })
-
   return { success: true }
 })
 
