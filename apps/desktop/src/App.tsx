@@ -12,6 +12,7 @@ import { OverlayPage } from './pages/Overlay'
 import { OCRPage } from './pages/OCR'
 import { OCRSelectPage } from './pages/OCRSelect'
 import { ProfilePage } from './pages/Profile'
+import { StatsPage } from './pages/Stats'
 import { useAuthStore } from './store/auth'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -58,6 +59,9 @@ function AppRoutes() {
           } />
           <Route path="/profile" element={
             <ProtectedRoute><ProfilePage /></ProtectedRoute>
+          } />
+          <Route path="/stats" element={
+            <ProtectedRoute><StatsPage /></ProtectedRoute>
           } />
           <Route path="*" element={
             isAuthenticated

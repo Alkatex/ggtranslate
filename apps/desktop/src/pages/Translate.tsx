@@ -8,6 +8,7 @@ import { getAvailableLanguages } from '../lib/languages'
 import { getAvailableEffects, VoiceEffect, applyVoiceEffect } from '../lib/voiceEffects'
 import { translateText } from '../lib/translation'
 import { speakTranslation } from '../lib/tts'
+import { updateStats } from '../lib/stats'
 
 const API_URL = 'https://ggtranslatebackend-production.up.railway.app'
 
@@ -64,6 +65,15 @@ export function TranslatePage() {
   const otherFeedRef = useRef<HTMLDivElement>(null)
   const currentTranscriptRef = useRef('')
   const currentOtherTranscriptRef = useRef('')
+  const detectedGameRef = useRef<string | null>(null)
+  const detectedGameEmojiRef = useRef<string | null>(null)
+  const targetLangRef = useRef(targetLang)
+  const sourceLangRef = useRef(sourceLang)
+
+  useEffect(() => { targetLangRef.current = targetLang }, [targetLang])
+  useEffect(() => { sourceLangRef.current = sourceLang }, [sourceLang])
+  useEffect(() => { detectedGameRef.current = detectedGame }, [detectedGame])
+  useEffect(() => { detectedGameEmojiRef.current = detectedGameEmoji }, [detectedGameEmoji])
 
   const categories = ['Tous', ...Array.from(new Set(EFFECTS.map(e => e.category)))]
   const filteredEffects = selectedCategory === 'Tous'
@@ -210,6 +220,16 @@ export function TranslatePage() {
       setCurrentTranscript('')
       currentTranscriptRef.current = ''
       setErrorMsg('')
+
+      // Stats — nouvelle session
+      const { user } = useAuthStore.getState()
+      if (user) {
+        updateStats(user.id, {
+          newSession: true,
+          game: detectedGameRef.current ? { name: detectedGameRef.current, emoji: detectedGameEmojiRef.current || '🎮' } : null,
+        })
+      }
+
       await pipelineRef.current?.start({
         micDeviceId, headsetDeviceId, virtualDeviceId,
         sourceLang, targetLang, voiceEffect: activeEffect,
@@ -228,6 +248,17 @@ export function TranslatePage() {
           setCurrentTranscript('')
           currentTranscriptRef.current = ''
           setSessionPhrases(prev => prev + 1)
+
+          // Stats — phrase traduite
+          const { user } = useAuthStore.getState()
+          if (user) {
+            const langInfo = LANGUAGES.find(l => l.code === targetLangRef.current)
+            updateStats(user.id, {
+              phrases: 1,
+              targetLang: langInfo ? { code: langInfo.code, flag: langInfo.flag, name: langInfo.name } : undefined,
+              game: detectedGameRef.current ? { name: detectedGameRef.current, emoji: detectedGameEmojiRef.current || '🎮' } : null,
+            })
+          }
         },
         onError: (error) => {
           setErrorMsg(error)
@@ -269,6 +300,17 @@ export function TranslatePage() {
           setCurrentOtherTranscript('')
           currentOtherTranscriptRef.current = ''
           setSessionPhrases(prev => prev + 1)
+
+          // Stats — phrase other players
+          const { user } = useAuthStore.getState()
+          if (user) {
+            const langInfo = LANGUAGES.find(l => l.code === sourceLangRef.current)
+            updateStats(user.id, {
+              phrases: 1,
+              targetLang: langInfo ? { code: langInfo.code, flag: langInfo.flag, name: langInfo.name } : undefined,
+              game: detectedGameRef.current ? { name: detectedGameRef.current, emoji: detectedGameEmojiRef.current || '🎮' } : null,
+            })
+          }
         },
         onError: (error) => {
           setOtherError(error)
@@ -295,6 +337,17 @@ export function TranslatePage() {
         timestamp: new Date().toLocaleTimeString(),
       }])
       setSessionPhrases(prev => prev + 1)
+
+      // Stats — phrase rapide
+      const { user } = useAuthStore.getState()
+      if (user) {
+        const langInfo = LANGUAGES.find(l => l.code === targetLang)
+        updateStats(user.id, {
+          phrases: 1,
+          targetLang: langInfo ? { code: langInfo.code, flag: langInfo.flag, name: langInfo.name } : undefined,
+          game: detectedGameRef.current ? { name: detectedGameRef.current, emoji: detectedGameEmojiRef.current || '🎮' } : null,
+        })
+      }
     } catch (err) {
       console.error('Erreur phrase rapide:', err)
     }
@@ -421,7 +474,6 @@ export function TranslatePage() {
             <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.15em', marginTop: '2px' }}>TRADUCTION VOCALE GAMING</div>
           </div>
 
-          {/* BADGE JEU DÉTECTÉ */}
           {detectedGame ? (
             <div style={{
               background: 'rgba(168,85,247,0.15)',
@@ -443,21 +495,20 @@ export function TranslatePage() {
               display: 'flex', alignItems: 'center', gap: '6px',
             }}>
               <div style={{ width: '6px', height: '6px', background: '#475569', borderRadius: '50%' }}/>
-              <span style={{ color: '#475569', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>
-                Aucun jeu
-              </span>
+              <span style={{ color: '#475569', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>Aucun jeu</span>
             </div>
           )}
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-         <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
-         <button onClick={() => navigate('/profile')} title="Mon profil" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>👤</button>
-         <button onClick={() => window.electron.overlay.open()} title="Mode overlay" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>⧉</button>
-         <button onClick={() => navigate('/ocr')} title="Capture OCR" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>📷</button>
-         <button onClick={() => navigate('/groups')} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>Groupes</button>
-         <button onClick={() => navigate('/pricing')} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>Plans</button>
-       </div>
+          <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
+          <button onClick={() => navigate('/profile')} title="Mon profil" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>👤</button>
+          <button onClick={() => navigate('/stats')} title="Statistiques" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>📊</button>
+          <button onClick={() => window.electron.overlay.open()} title="Mode overlay" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>⧉</button>
+          <button onClick={() => navigate('/ocr')} title="Capture OCR" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>📷</button>
+          <button onClick={() => navigate('/groups')} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>Groupes</button>
+          <button onClick={() => navigate('/pricing')} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>Plans</button>
+        </div>
       </div>
 
       {/* BANNIÈRE AUTO-UPDATE */}
@@ -610,7 +661,6 @@ export function TranslatePage() {
               const isActive = activeEffect === effect.id
               const isPreviewing = previewingEffect === effect.id
               const effectLocked = !canUseFeature('voiceEffects')
-
               return (
                 <div key={effect.id} className="effect-card" onClick={() => !effectLocked && setActiveEffect(effect.id)} style={{
                   position: 'relative',
