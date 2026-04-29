@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 
+const API_URL = 'http://localhost:3001'
+const DISCORD_CLIENT_ID = '1499073387828609094'
+
 interface AudioDevice {
   deviceId: string
   label: string
@@ -19,36 +22,60 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
 
+  const [discordGuildId, setDiscordGuildId] = useState('')
+  const [discordEnabled, setDiscordEnabled] = useState(false)
+  const [discordStatus, setDiscordStatus] = useState<'idle' | 'checking' | 'connected' | 'error'>('idle')
+
   useEffect(() => {
-    async function loadDevices() {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
-          .then(s => s.getTracks().forEach(t => t.stop()))
-
-        const devices = await navigator.mediaDevices.enumerateDevices()
-
-        setInputs(devices
-          .filter(d => d.kind === 'audioinput')
-          .map(d => ({ deviceId: d.deviceId, label: d.label || 'Micro inconnu' }))
-        )
-        setOutputs(devices
-          .filter(d => d.kind === 'audiooutput')
-          .map(d => ({ deviceId: d.deviceId, label: d.label || 'Sortie inconnue' }))
-        )
-
-        const savedMic = await window.electron.settings.get('micDeviceId') as string
-        const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
-        const savedVirtual = await window.electron.settings.get('virtualDeviceId') as string
-        if (savedMic) setSelectedMic(savedMic)
-        if (savedHeadset) setSelectedHeadset(savedHeadset)
-        if (savedVirtual) setSelectedVirtualDevice(savedVirtual)
-
-      } catch (err) {
-        console.error('Erreur accès périphériques:', err)
-      }
-    }
     loadDevices()
+    loadDiscordSettings()
   }, [])
+
+  async function loadDevices() {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(s => s.getTracks().forEach(t => t.stop()))
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      setInputs(devices.filter(d => d.kind === 'audioinput').map(d => ({ deviceId: d.deviceId, label: d.label || 'Micro inconnu' })))
+      setOutputs(devices.filter(d => d.kind === 'audiooutput').map(d => ({ deviceId: d.deviceId, label: d.label || 'Sortie inconnue' })))
+      const savedMic = await window.electron.settings.get('micDeviceId') as string
+      const savedHeadset = await window.electron.settings.get('headsetDeviceId') as string
+      const savedVirtual = await window.electron.settings.get('virtualDeviceId') as string
+      if (savedMic) setSelectedMic(savedMic)
+      if (savedHeadset) setSelectedHeadset(savedHeadset)
+      if (savedVirtual) setSelectedVirtualDevice(savedVirtual)
+    } catch (err) {
+      console.error('Erreur accès périphériques:', err)
+    }
+  }
+
+  async function loadDiscordSettings() {
+    const savedGuildId = await window.electron.settings.get('discordGuildId') as string
+    const savedEnabled = await window.electron.settings.get('discordEnabled') as boolean
+    if (savedGuildId) {
+      setDiscordGuildId(savedGuildId)
+      setDiscordEnabled(savedEnabled || false)
+      checkDiscordConnection(savedGuildId)
+    }
+  }
+
+  async function checkDiscordConnection(guildId: string) {
+    if (!guildId) return
+    setDiscordStatus('checking')
+    try {
+      const res = await fetch(`${API_URL}/discord/check/${guildId}`)
+      const data = await res.json()
+      setDiscordStatus(data.inGuild ? 'connected' : 'error')
+    } catch {
+      setDiscordStatus('error')
+    }
+  }
+
+  async function saveDiscordSettings() {
+    await window.electron.settings.set('discordGuildId', discordGuildId)
+    await window.electron.settings.set('discordEnabled', discordEnabled)
+    await checkDiscordConnection(discordGuildId)
+  }
 
   async function testMic() {
     setTesting(true)
@@ -77,13 +104,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           audioCtx.close()
           setTesting(false)
           setMicVolume(0)
-          setTestResult(maxVol > 5
-            ? '✅ Micro détecté et fonctionnel !'
-            : '⚠️ Aucun son détecté — vérifie ton micro.')
+          setTestResult(maxVol > 5 ? '✅ Micro détecté et fonctionnel !' : '⚠️ Aucun son détecté — vérifie ton micro.')
         }
       }
       requestAnimationFrame(check)
-    } catch (err) {
+    } catch {
       setTesting(false)
       setTestResult('❌ Impossible d\'accéder au micro — vérifie les permissions.')
     }
@@ -93,10 +118,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     if (selectedMic) window.electron.settings.set('micDeviceId', selectedMic)
     if (selectedHeadset) window.electron.settings.set('headsetDeviceId', selectedHeadset)
     if (selectedVirtualDevice) window.electron.settings.set('virtualDeviceId', selectedVirtualDevice)
+    window.electron.settings.set('discordGuildId', discordGuildId)
+    window.electron.settings.set('discordEnabled', discordEnabled)
     onClose(selectedMic || null, selectedHeadset || null, selectedVirtualDevice || null)
   }
 
-  // Filtrer les outputs pour la sortie Discord — montrer seulement VB-Audio
   const discordOutputs = outputs.filter(d =>
     d.label.toLowerCase().includes('cable') ||
     d.label.toLowerCase().includes('vb-audio') ||
@@ -107,179 +133,145 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     <div style={{
       position: 'fixed', inset: 0, zIndex: 100,
       background: 'rgba(0,0,0,0.7)',
-      display: 'flex', alignItems: 'center',
-      justifyContent: 'center',
-    }}
-      onClick={handleClose}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: '#0d1424',
-          border: '1px solid #1e2d45',
-          borderRadius: '16px', padding: '28px',
-          width: '100%', maxWidth: '480px',
-          maxHeight: '90vh', overflowY: 'auto',
-        }}>
-
-        <div style={{
-          display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', marginBottom: '24px',
-        }}>
-          <div style={{
-            fontFamily: 'Orbitron, sans-serif',
-            color: '#fff', fontSize: '14px',
-            letterSpacing: '0.1em',
-          }}>⚙️ PARAMÈTRES AUDIO</div>
-          <button
-            onClick={handleClose}
-            style={{
-              background: 'transparent', border: 'none',
-              color: '#475569', cursor: 'pointer', fontSize: '20px',
-            }}>✕</button>
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }} onClick={handleClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#0d1424', border: '1px solid #1e2d45',
+        borderRadius: '16px', padding: '28px',
+        width: '100%', maxWidth: '480px',
+        maxHeight: '90vh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '14px', letterSpacing: '0.1em' }}>⚙️ PARAMÈTRES</div>
+          <button onClick={handleClose} style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: '20px' }}>✕</button>
         </div>
 
         {/* MICROPHONE */}
         <div style={{ marginBottom: '20px' }}>
-          <div style={{
-            color: '#06b6d4', fontSize: '11px',
-            fontFamily: 'Orbitron, sans-serif',
-            letterSpacing: '0.1em', marginBottom: '8px',
-          }}>🎤 MICROPHONE</div>
-          <select
-            value={selectedMic}
-            onChange={e => setSelectedMic(e.target.value)}
-            style={{
-              width: '100%', background: '#111827',
-              border: '1px solid #1e2d45', color: '#fff',
-              padding: '10px 14px', borderRadius: '8px',
-              fontSize: '13px', cursor: 'pointer',
-              marginBottom: '10px',
-            }}>
+          <div style={{ color: '#06b6d4', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.1em', marginBottom: '8px' }}>🎤 MICROPHONE</div>
+          <select value={selectedMic} onChange={e => setSelectedMic(e.target.value)} style={{ width: '100%', background: '#111827', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', marginBottom: '10px' }}>
             <option value="">Micro par défaut</option>
-            {inputs.map(d => (
-              <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
-            ))}
+            {inputs.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}
           </select>
 
-          <div style={{
-            height: '6px', background: '#1e2d45',
-            borderRadius: '99px', overflow: 'hidden',
-            marginBottom: '10px',
-          }}>
-            <div style={{
-              height: '100%', width: `${micVolume}%`,
-              background: micVolume > 70 ? '#22c55e' : micVolume > 30 ? '#06b6d4' : '#475569',
-              borderRadius: '99px', transition: 'width 0.1s',
-            }}/>
+          <div style={{ height: '6px', background: '#1e2d45', borderRadius: '99px', overflow: 'hidden', marginBottom: '10px' }}>
+            <div style={{ height: '100%', width: `${micVolume}%`, background: micVolume > 70 ? '#22c55e' : micVolume > 30 ? '#06b6d4' : '#475569', borderRadius: '99px', transition: 'width 0.1s' }}/>
           </div>
 
-          <button
-            onClick={testMic}
-            disabled={testing}
-            style={{
-              background: testing ? 'rgba(6,182,212,0.1)' : 'transparent',
-              border: '1px solid #1e2d45',
-              color: testing ? '#06b6d4' : '#94a3b8',
-              padding: '8px 16px', borderRadius: '8px',
-              cursor: testing ? 'not-allowed' : 'pointer',
-              fontSize: '12px', fontFamily: 'Orbitron, sans-serif',
-            }}>
+          <button onClick={testMic} disabled={testing} style={{ background: testing ? 'rgba(6,182,212,0.1)' : 'transparent', border: '1px solid #1e2d45', color: testing ? '#06b6d4' : '#94a3b8', padding: '8px 16px', borderRadius: '8px', cursor: testing ? 'not-allowed' : 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>
             {testing ? '🎤 Test en cours...' : '🎤 Tester le micro'}
           </button>
 
-          {testResult && (
-            <div style={{
-              marginTop: '8px', fontSize: '12px',
-              color: testResult.startsWith('✅') ? '#22c55e' : '#f97316',
-            }}>{testResult}</div>
-          )}
+          {testResult && <div style={{ marginTop: '8px', fontSize: '12px', color: testResult.startsWith('✅') ? '#22c55e' : '#f97316' }}>{testResult}</div>}
         </div>
 
         {/* CASQUE */}
         <div style={{ marginBottom: '20px' }}>
-          <div style={{
-            color: '#06b6d4', fontSize: '11px',
-            fontFamily: 'Orbitron, sans-serif',
-            letterSpacing: '0.1em', marginBottom: '8px',
-          }}>🔊 CASQUE / SORTIE AUDIO</div>
-          <select
-            value={selectedHeadset}
-            onChange={e => setSelectedHeadset(e.target.value)}
-            style={{
-              width: '100%', background: '#111827',
-              border: '1px solid #1e2d45', color: '#fff',
-              padding: '10px 14px', borderRadius: '8px',
-              fontSize: '13px', cursor: 'pointer',
-            }}>
+          <div style={{ color: '#06b6d4', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.1em', marginBottom: '8px' }}>🔊 CASQUE / SORTIE AUDIO</div>
+          <select value={selectedHeadset} onChange={e => setSelectedHeadset(e.target.value)} style={{ width: '100%', background: '#111827', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
             <option value="">Sortie par défaut</option>
-            {outputs.map(d => (
-              <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
-            ))}
+            {outputs.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}
           </select>
         </div>
 
         {/* SORTIE VERS DISCORD */}
         <div style={{ marginBottom: '24px' }}>
-          <div style={{
-            color: '#a855f7', fontSize: '11px',
-            fontFamily: 'Orbitron, sans-serif',
-            letterSpacing: '0.1em', marginBottom: '8px',
-          }}>🎮 SORTIE VERS DISCORD / JEU</div>
-          <div style={{
-            color: '#475569', fontSize: '11px',
-            marginBottom: '8px',
-          }}>
-            Sélectionne le device où la traduction sera envoyée pour que tes coéquipiers l'entendent
-          </div>
-          <select
-            value={selectedVirtualDevice}
-            onChange={e => setSelectedVirtualDevice(e.target.value)}
-            style={{
-              width: '100%', background: '#111827',
-              border: '1px solid #2d1f45', color: '#fff',
-              padding: '10px 14px', borderRadius: '8px',
-              fontSize: '13px', cursor: 'pointer',
-            }}>
+          <div style={{ color: '#a855f7', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.1em', marginBottom: '8px' }}>🎮 SORTIE VERS DISCORD / JEU</div>
+          <div style={{ color: '#475569', fontSize: '11px', marginBottom: '8px' }}>Sélectionne le device où la traduction sera envoyée pour que tes coéquipiers l'entendent</div>
+          <select value={selectedVirtualDevice} onChange={e => setSelectedVirtualDevice(e.target.value)} style={{ width: '100%', background: '#111827', border: '1px solid #2d1f45', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
             <option value="">Désactivé</option>
-            {discordOutputs.length > 0 ? (
-              discordOutputs.map(d => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
-              ))
-            ) : (
-              outputs.map(d => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
-              ))
-            )}
+            {discordOutputs.length > 0
+              ? discordOutputs.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label}</option>)
+              : outputs.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label}</option>)
+            }
           </select>
-          {selectedVirtualDevice && (
-            <div style={{
-              marginTop: '8px', fontSize: '11px',
-              color: '#22c55e',
-            }}>
-              ✅ La traduction sera envoyée vers ce device — configure-le comme micro dans Discord
+          {selectedVirtualDevice && <div style={{ marginTop: '8px', fontSize: '11px', color: '#22c55e' }}>✅ La traduction sera envoyée vers ce device</div>}
+          {discordOutputs.length === 0 && <div style={{ marginTop: '8px', fontSize: '11px', color: '#f97316' }}>⚠️ GGTranslate Mic non détecté</div>}
+        </div>
+
+        {/* DISCORD BOT */}
+        <div style={{ marginBottom: '24px', background: '#0a0f1a', border: '1px solid #1e2d45', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ color: '#5865f2', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.1em' }}>
+              <span style={{ fontSize: '16px', marginRight: '6px' }}>🤖</span>DISCORD BOT
             </div>
-          )}
-          {discordOutputs.length === 0 && (
-            <div style={{
-              marginTop: '8px', fontSize: '11px',
-              color: '#f97316',
-            }}>
-              ⚠️ GGTranslate Mic non détecté — il sera installé automatiquement au prochain lancement
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', color: discordEnabled ? '#22c55e' : '#475569' }}>
+                {discordEnabled ? 'Activé' : 'Désactivé'}
+              </span>
+              <div
+                onClick={() => setDiscordEnabled(!discordEnabled)}
+                style={{
+                  width: '36px', height: '20px', borderRadius: '99px',
+                  background: discordEnabled ? '#5865f2' : '#1e2d45',
+                  cursor: 'pointer', position: 'relative', transition: 'all 0.2s',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: '3px',
+                  left: discordEnabled ? '18px' : '3px',
+                  width: '14px', height: '14px',
+                  background: '#fff', borderRadius: '50%',
+                  transition: 'all 0.2s',
+                }}/>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ color: '#475569', fontSize: '11px', marginBottom: '12px', lineHeight: 1.5 }}>
+            Le bot poste les traductions en temps réel dans un canal <strong style={{ color: '#5865f2' }}>#ggtranslate</strong> de ton serveur Discord.
+          </div>
+
+          <button
+            onClick={() => {
+              const url = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&permissions=3072&scope=bot`
+              window.electron.shell.openExternal(url)
+            }}
+            style={{
+              width: '100%', marginBottom: '12px',
+              background: 'rgba(88,101,242,0.15)', border: '1px solid #5865f2',
+              color: '#5865f2', padding: '10px', borderRadius: '8px',
+              cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif',
+            }}
+          >
+            📨 Inviter le bot dans mon serveur
+          </button>
+
+          <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '6px' }}>
+            ID du serveur Discord
+            <span style={{ color: '#475569', marginLeft: '6px' }}>(Clic droit sur ton serveur → Copier l'identifiant)</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              value={discordGuildId}
+              onChange={e => setDiscordGuildId(e.target.value)}
+              placeholder="Ex: 1443738679477801143"
+              style={{
+                flex: 1, background: '#111827', border: '1px solid #1e2d45',
+                color: '#fff', padding: '10px 14px', borderRadius: '8px',
+                fontSize: '13px', outline: 'none',
+              }}
+            />
+            <button
+              onClick={saveDiscordSettings}
+              style={{
+                background: 'rgba(88,101,242,0.2)', border: '1px solid #5865f2',
+                color: '#5865f2', padding: '10px 14px', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '12px',
+              }}
+            >✓</button>
+          </div>
+
+          {discordStatus !== 'idle' && (
+            <div style={{ marginTop: '10px', fontSize: '12px', color: discordStatus === 'connected' ? '#22c55e' : discordStatus === 'checking' ? '#06b6d4' : '#ef4444' }}>
+              {discordStatus === 'checking' && '⟳ Vérification...'}
+              {discordStatus === 'connected' && '✅ Bot connecté — les traductions seront postées dans #ggtranslate'}
+              {discordStatus === 'error' && '❌ Bot non trouvé — invite-le d\'abord puis réessaie'}
             </div>
           )}
         </div>
 
-        <button
-          onClick={handleClose}
-          style={{
-            width: '100%',
-            background: 'linear-gradient(to right, #3b82f6, #06b6d4)',
-            border: 'none', color: '#fff',
-            padding: '12px', borderRadius: '10px',
-            cursor: 'pointer', fontSize: '14px',
-            fontFamily: 'Orbitron, sans-serif', fontWeight: 700,
-          }}>
+        <button onClick={handleClose} style={{ width: '100%', background: 'linear-gradient(to right, #3b82f6, #06b6d4)', border: 'none', color: '#fff', padding: '12px', borderRadius: '10px', cursor: 'pointer', fontSize: '14px', fontFamily: 'Orbitron, sans-serif', fontWeight: 700 }}>
           Sauvegarder
         </button>
       </div>

@@ -2,44 +2,39 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 
-// Charger les variables d'environnement
 dotenv.config({ path: '../.env' })
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: ['http://localhost:5173', 'app://localhost'],
+  origin: ['http://localhost:5173', 'app://localhost', 'https://ggtranslatebackend-production.up.railway.app'],
   credentials: true,
 }))
 app.use(express.json())
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-  })
+  res.json({ status: 'ok', version: '1.0.0', timestamp: new Date().toISOString() })
 })
 
-// Routes auth
 import authRouter from './routes/auth'
 app.use('/auth', authRouter)
 
-// Routes AI proxy
 import aiRouter from './routes/ai'
 app.use('/ai', aiRouter)
 
-// Routes billing
 import billingRouter from './routes/billing'
 app.use('/billing', billingRouter)
 
-// ─── Démarrer le serveur ──────────────────────────────────────────────────────
+import discordRouter from './routes/discord'
+app.use('/discord', discordRouter)
+
 app.listen(PORT, () => {
   console.log(`✅ Backend GGTranslate running on http://localhost:${PORT}`)
   console.log(`🔒 Environment: ${process.env.NODE_ENV || 'development'}`)
 })
+
+// Démarrer le bot Discord
+import './services/discordBot'
 
 export default app

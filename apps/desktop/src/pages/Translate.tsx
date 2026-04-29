@@ -12,6 +12,7 @@ import { speakTranslation } from '../lib/tts'
 import { updateStats } from '../lib/stats'
 
 const API_URL = 'https://ggtranslatebackend-production.up.railway.app'
+const DISCORD_API = 'http://localhost:3001'
 
 const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse']
 
@@ -23,6 +24,29 @@ interface FeedItem {
 }
 
 let feedCounter = 0
+
+async function sendToDiscord(opts: {
+  original: string
+  translated: string
+  sourceLang: string
+  targetLang: string
+  sourceLangFlag: string
+  targetLangFlag: string
+  game?: string | null
+  gameEmoji?: string | null
+  username?: string
+}) {
+  try {
+    const guildId = await window.electron.settings.get('discordGuildId') as string
+    const enabled = await window.electron.settings.get('discordEnabled') as boolean
+    if (!guildId || !enabled) return
+    await fetch(`${DISCORD_API}/discord/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guildId, ...opts }),
+    })
+  } catch {}
+}
 
 export function TranslatePage() {
   const navigate = useNavigate()
@@ -169,23 +193,18 @@ export function TranslatePage() {
     e.stopPropagation()
     if (!canUseFeature('voiceEffects')) return
     if (previewingEffect === effect.id) return
-
     setPreviewingEffect(effect.id)
     try {
       const sampleText = targetLang === 'fr' ? 'Bonjour ceci est un test' : 'Hello this is a test'
       const voice = targetLang === 'fr' ? 'aura-2-agathe-fr' : 'aura-2-thalia-en'
-
       const res = await fetch(`${API_URL}/ai/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: sampleText, voice, targetLang }),
       })
-
       if (!res.ok) throw new Error('TTS failed')
-
       const blob = await res.blob()
       const arrayBuffer = await blob.arrayBuffer()
-
       if (effect.id === 'normal') {
         const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
         const url = URL.createObjectURL(audioBlob)
@@ -197,15 +216,12 @@ export function TranslatePage() {
         await audio.play()
         return
       }
-
       const audioCtx = new AudioContext()
       if (headsetDeviceId && headsetDeviceId !== 'default' && 'setSinkId' in audioCtx) {
         try { await (audioCtx as any).setSinkId(headsetDeviceId) } catch {}
       }
-
       let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
       audioBuffer = await applyVoiceEffect(audioBuffer, effect.id)
-
       const source = audioCtx.createBufferSource()
       source.buffer = audioBuffer
       source.connect(audioCtx.destination)
@@ -240,9 +256,10 @@ export function TranslatePage() {
           currentTranscriptRef.current = text
         },
         onTranslated: (text) => {
+          const originalText = currentTranscriptRef.current
           setMyFeed(prev => [...prev, {
             id: ++feedCounter,
-            original: currentTranscriptRef.current,
+            original: originalText,
             translated: text,
             timestamp: new Date().toLocaleTimeString(),
           }])
@@ -259,6 +276,20 @@ export function TranslatePage() {
               game: detectedGameRef.current ? { name: detectedGameRef.current, emoji: detectedGameEmojiRef.current || '🎮' } : null,
             })
           }
+
+          // Envoyer sur Discord
+          const srcInfo = LANGUAGES.find(l => l.code === sourceLangRef.current)
+          const tgtInfo = LANGUAGES.find(l => l.code === targetLangRef.current)
+          sendToDiscord({
+            original: originalText,
+            translated: text,
+            sourceLang: sourceLangRef.current,
+            targetLang: targetLangRef.current,
+            sourceLangFlag: srcInfo?.flag || '🌍',
+            targetLangFlag: tgtInfo?.flag || '🌍',
+            game: detectedGameRef.current,
+            gameEmoji: detectedGameEmojiRef.current,
+          })
         },
         onError: (error) => {
           setErrorMsg(error)
@@ -291,9 +322,10 @@ export function TranslatePage() {
           currentOtherTranscriptRef.current = text
         },
         onTranslated: (text) => {
+          const originalText = currentOtherTranscriptRef.current
           setOtherFeed(prev => [...prev, {
             id: ++feedCounter,
-            original: currentOtherTranscriptRef.current,
+            original: originalText,
             translated: text,
             timestamp: new Date().toLocaleTimeString(),
           }])
@@ -310,6 +342,20 @@ export function TranslatePage() {
               game: detectedGameRef.current ? { name: detectedGameRef.current, emoji: detectedGameEmojiRef.current || '🎮' } : null,
             })
           }
+
+          // Envoyer sur Discord
+          const srcInfo = LANGUAGES.find(l => l.code === targetLangRef.current)
+          const tgtInfo = LANGUAGES.find(l => l.code === sourceLangRef.current)
+          sendToDiscord({
+            original: originalText,
+            translated: text,
+            sourceLang: targetLangRef.current,
+            targetLang: sourceLangRef.current,
+            sourceLangFlag: srcInfo?.flag || '🌍',
+            targetLangFlag: tgtInfo?.flag || '🌍',
+            game: detectedGameRef.current,
+            gameEmoji: detectedGameEmojiRef.current,
+          })
         },
         onError: (error) => {
           setOtherError(error)
@@ -346,6 +392,20 @@ export function TranslatePage() {
           game: detectedGameRef.current ? { name: detectedGameRef.current, emoji: detectedGameEmojiRef.current || '🎮' } : null,
         })
       }
+
+      // Envoyer sur Discord
+      const srcInfo = LANGUAGES.find(l => l.code === sourceLang)
+      const tgtInfo = LANGUAGES.find(l => l.code === targetLang)
+      sendToDiscord({
+        original: text,
+        translated,
+        sourceLang,
+        targetLang,
+        sourceLangFlag: srcInfo?.flag || '🌍',
+        targetLangFlag: tgtInfo?.flag || '🌍',
+        game: detectedGameRef.current,
+        gameEmoji: detectedGameEmojiRef.current,
+      })
     } catch (err) {
       console.error('Erreur phrase rapide:', err)
     }
@@ -405,7 +465,6 @@ export function TranslatePage() {
         .effect-card:hover .preview-btn { opacity: 1 !important; }
       `}</style>
 
-      {/* BADGE SESSION */}
       {showSessionBadge && (
         <div style={{
           position: 'fixed', top: '20px', left: '50%',
@@ -422,7 +481,6 @@ export function TranslatePage() {
         </div>
       )}
 
-      {/* POPUP UPGRADE */}
       {showUpgradePopup && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 300,
@@ -437,9 +495,7 @@ export function TranslatePage() {
             animation: 'slide-down 0.3s ease',
           }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏱️</div>
-            <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '20px', marginBottom: '8px' }}>
-              Ton trial est terminé
-            </div>
+            <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '20px', marginBottom: '8px' }}>Ton trial est terminé</div>
             <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '24px' }}>
               Tu as traduit <strong style={{ color: '#06b6d4' }}>{sessionPhrases} phrases</strong> cette session.
             </div>
@@ -454,9 +510,7 @@ export function TranslatePage() {
                 padding: '12px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px',
               }}>Continuer en Free (10 min/jour)</button>
             </div>
-            <div style={{ color: '#475569', fontSize: '11px' }}>
-              Starter à 7,99$/mois · Pro à 14,99$/mois · Annulation en 1 clic
-            </div>
+            <div style={{ color: '#475569', fontSize: '11px' }}>Starter à 7,99$/mois · Pro à 14,99$/mois · Annulation en 1 clic</div>
           </div>
         </div>
       )}
@@ -471,33 +525,19 @@ export function TranslatePage() {
             <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '18px', fontWeight: 700, letterSpacing: '0.1em' }}>GG TRANSLATE</div>
             <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.15em', marginTop: '2px' }}>TRADUCTION VOCALE GAMING</div>
           </div>
-
           {detectedGame ? (
-            <div style={{
-              background: 'rgba(168,85,247,0.15)',
-              border: '1px solid rgba(168,85,247,0.4)',
-              borderRadius: '8px', padding: '4px 12px',
-              display: 'flex', alignItems: 'center', gap: '6px',
-            }}>
+            <div style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)', borderRadius: '8px', padding: '4px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <div style={{ width: '6px', height: '6px', background: '#22c55e', borderRadius: '50%', animation: 'pulse-green 2s ease infinite' }}/>
               <span style={{ fontSize: '14px' }}>{detectedGameEmoji}</span>
-              <span style={{ color: '#a855f7', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.05em' }}>
-                {detectedGame}
-              </span>
+              <span style={{ color: '#a855f7', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.05em' }}>{detectedGame}</span>
             </div>
           ) : (
-            <div style={{
-              background: 'rgba(71,85,105,0.15)',
-              border: '1px solid #1e2d45',
-              borderRadius: '8px', padding: '4px 12px',
-              display: 'flex', alignItems: 'center', gap: '6px',
-            }}>
+            <div style={{ background: 'rgba(71,85,105,0.15)', border: '1px solid #1e2d45', borderRadius: '8px', padding: '4px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <div style={{ width: '6px', height: '6px', background: '#475569', borderRadius: '50%' }}/>
               <span style={{ color: '#475569', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>Aucun jeu</span>
             </div>
           )}
         </div>
-
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
           <button onClick={() => setShowTheme(true)} title="Thème" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>🎨</button>
@@ -510,38 +550,20 @@ export function TranslatePage() {
         </div>
       </div>
 
-      {/* BANNIÈRE AUTO-UPDATE */}
       {updateDownloaded && (
-        <div style={{
-          background: 'rgba(34,197,94,0.1)', border: '1px solid #22c55e',
-          borderRadius: '10px', padding: '12px 16px', marginBottom: '16px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <span style={{ color: '#22c55e', fontSize: '13px' }}>
-            🚀 Mise à jour {updateVersion} prête à installer
-          </span>
-          <button onClick={() => window.electron.updater.install()} style={{
-            background: '#22c55e', border: 'none', color: '#fff',
-            padding: '6px 14px', borderRadius: '6px',
-            cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif',
-          }}>Installer →</button>
+        <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid #22c55e', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ color: '#22c55e', fontSize: '13px' }}>🚀 Mise à jour {updateVersion} prête à installer</span>
+          <button onClick={() => window.electron.updater.install()} style={{ background: '#22c55e', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>Installer →</button>
         </div>
       )}
 
       {/* PLAN STATUS */}
-      <div style={{
-        background: '#0d1424', border: `1px solid ${isLowTime ? 'rgba(239,68,68,0.5)' : '#1e2d45'}`,
-        borderRadius: '12px', padding: '16px', marginBottom: '20px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        animation: isLowTime ? 'pulse-red 1s ease infinite' : 'none',
-      }}>
+      <div style={{ background: '#0d1424', border: `1px solid ${isLowTime ? 'rgba(239,68,68,0.5)' : '#1e2d45'}`, borderRadius: '12px', padding: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: isLowTime ? 'pulse-red 1s ease infinite' : 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ background: `${planColor}22`, color: planColor, padding: '4px 12px', borderRadius: '99px', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', border: `1px solid ${planColor}44` }}>{planLabel}</span>
           {plan !== 'pro' && secondsRemaining > 0 && (
             <div style={{ color: isLowTime ? '#ef4444' : '#94a3b8', fontSize: '12px', fontWeight: isLowTime ? 700 : 400 }}>
-              <span style={{ color: isLowTime ? '#ef4444' : '#fff', fontWeight: 600 }}>
-                {Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}
-              </span> restantes
+              <span style={{ color: isLowTime ? '#ef4444' : '#fff', fontWeight: 600 }}>{Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}</span> restantes
             </div>
           )}
           {plan === 'pro' && <div style={{ color: '#a855f7', fontSize: '12px' }}>∞ Illimité</div>}
@@ -613,7 +635,6 @@ export function TranslatePage() {
           {errorMsg && <div style={{ color: '#ef4444', fontSize: '12px' }}>{errorMsg}</div>}
         </div>
 
-        {/* FEED */}
         <div ref={myFeedRef} style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
           {myFeed.length === 0 ? (
             <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '16px' }}>Les traductions apparaîtront ici</div>
@@ -628,7 +649,6 @@ export function TranslatePage() {
           )}
         </div>
 
-        {/* EFFETS DE VOIX */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em' }}>🎛️ EFFETS DE VOIX</div>
@@ -698,11 +718,7 @@ export function TranslatePage() {
 
           {!canUseFeature('voiceEffects') && (
             <div style={{ textAlign: 'center', marginTop: '12px' }}>
-              <button onClick={() => navigate('/pricing')} style={{
-                background: 'transparent', border: '1px solid #06b6d4',
-                color: '#06b6d4', padding: '8px 20px', borderRadius: '8px',
-                cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif',
-              }}>🔒 Débloquer les effets — Starter</button>
+              <button onClick={() => navigate('/pricing')} style={{ background: 'transparent', border: '1px solid #06b6d4', color: '#06b6d4', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>🔒 Débloquer les effets — Starter</button>
             </div>
           )}
         </div>
@@ -758,20 +774,15 @@ export function TranslatePage() {
             ))
           )}
         </div>
-
         {otherError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px' }}>{otherError}</div>}
       </div>
 
       {/* PHRASES RAPIDES */}
       <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em' }}>
-            ⚡ PHRASES RAPIDES
-          </div>
+          <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em' }}>⚡ PHRASES RAPIDES</div>
           {detectedGame && (
-            <span style={{ color: '#a855f7', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>
-              {detectedGameEmoji} {detectedGame}
-            </span>
+            <span style={{ color: '#a855f7', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>{detectedGameEmoji} {detectedGame}</span>
           )}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -785,7 +796,6 @@ export function TranslatePage() {
         </div>
       </div>
 
-      {/* SETTINGS PANEL */}
       {showSettings && (
         <SettingsPanel
           onClose={(mic, headset, virtual) => {
@@ -797,7 +807,6 @@ export function TranslatePage() {
         />
       )}
 
-      {/* THEME SELECTOR */}
       {showTheme && <ThemeSelector onClose={() => setShowTheme(false)} />}
     </div>
   )

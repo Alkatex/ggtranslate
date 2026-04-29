@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, shell } from 'electron'
 
 contextBridge.exposeInMainWorld('electron', {
   settings: {
@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('electron', {
   },
   audio: {
     requestPermission: () => ipcRenderer.invoke('audio:requestPermission'),
+  },
+  shell: {
+    openExternal: (url: string) => shell.openExternal(url),
   },
   updater: {
     install: () => ipcRenderer.invoke('update:install'),
@@ -132,6 +135,9 @@ declare global {
       }
       audio: {
         requestPermission: () => Promise<boolean>
+      }
+      shell: {
+        openExternal: (url: string) => void
       }
       updater: {
         install: () => Promise<void>
