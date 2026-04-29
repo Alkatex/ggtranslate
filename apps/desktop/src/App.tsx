@@ -14,6 +14,7 @@ import { OCRSelectPage } from './pages/OCRSelect'
 import { ProfilePage } from './pages/Profile'
 import { StatsPage } from './pages/Stats'
 import { useAuthStore } from './store/auth'
+import { useThemeStore } from './store/theme'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -23,6 +24,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const { isAuthenticated, refreshSession } = useAuthStore()
+  const { getTheme } = useThemeStore()
+  const theme = getTheme()
   const location = useLocation()
   const isOCRSelect = location.pathname === '/ocr-select'
 
@@ -37,7 +40,11 @@ function AppRoutes() {
   return (
     <>
       <ParticleBackground />
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{
+        position: 'relative', zIndex: 1,
+        filter: theme.filter === 'none' ? undefined : theme.filter,
+        minHeight: '100vh',
+      }}>
         <Routes>
           <Route path="/overlay" element={<OverlayPage />} />
           <Route path="/ocr" element={<OCRPage />} />

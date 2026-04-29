@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SettingsPanel } from '../components/SettingsPanel'
+import { ThemeSelector } from '../components/ThemeSelector'
 import { TranslationPipeline, PipelineState } from '../lib/pipeline'
 import { startOtherPlayers, stopOtherPlayers, OtherPlayersState } from '../lib/otherPlayersPipeline'
 import { useAuthStore } from '../store/auth'
@@ -35,6 +36,7 @@ export function TranslatePage() {
   const [activeEffect, setActiveEffect] = useState('normal')
   const [previewingEffect, setPreviewingEffect] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showTheme, setShowTheme] = useState(false)
   const [micDeviceId, setMicDeviceId] = useState<string | null>(null)
   const [headsetDeviceId, setHeadsetDeviceId] = useState<string | null>(null)
   const [virtualDeviceId, setVirtualDeviceId] = useState<string | null>(null)
@@ -221,7 +223,6 @@ export function TranslatePage() {
       currentTranscriptRef.current = ''
       setErrorMsg('')
 
-      // Stats — nouvelle session
       const { user } = useAuthStore.getState()
       if (user) {
         updateStats(user.id, {
@@ -249,7 +250,6 @@ export function TranslatePage() {
           currentTranscriptRef.current = ''
           setSessionPhrases(prev => prev + 1)
 
-          // Stats — phrase traduite
           const { user } = useAuthStore.getState()
           if (user) {
             const langInfo = LANGUAGES.find(l => l.code === targetLangRef.current)
@@ -301,7 +301,6 @@ export function TranslatePage() {
           currentOtherTranscriptRef.current = ''
           setSessionPhrases(prev => prev + 1)
 
-          // Stats — phrase other players
           const { user } = useAuthStore.getState()
           if (user) {
             const langInfo = LANGUAGES.find(l => l.code === sourceLangRef.current)
@@ -338,7 +337,6 @@ export function TranslatePage() {
       }])
       setSessionPhrases(prev => prev + 1)
 
-      // Stats — phrase rapide
       const { user } = useAuthStore.getState()
       if (user) {
         const langInfo = LANGUAGES.find(l => l.code === targetLang)
@@ -502,6 +500,7 @@ export function TranslatePage() {
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
+          <button onClick={() => setShowTheme(true)} title="Thème" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>🎨</button>
           <button onClick={() => navigate('/profile')} title="Mon profil" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>👤</button>
           <button onClick={() => navigate('/stats')} title="Statistiques" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>📊</button>
           <button onClick={() => window.electron.overlay.open()} title="Mode overlay" style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>⧉</button>
@@ -797,6 +796,9 @@ export function TranslatePage() {
           }}
         />
       )}
+
+      {/* THEME SELECTOR */}
+      {showTheme && <ThemeSelector onClose={() => setShowTheme(false)} />}
     </div>
   )
 }
