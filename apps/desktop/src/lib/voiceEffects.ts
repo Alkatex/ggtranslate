@@ -66,201 +66,55 @@ export function getAvailableEffects(plan: 'free' | 'starter' | 'pro' | 'trial'):
   return VOICE_EFFECTS.filter(e => e.id === 'normal')
 }
 
-// ─── DSP CONFIG PAR EFFET ────────────────────────────────────────────────────
-interface DSPConfig {
-  pitch: number        // semitones (-24 à +24)
-  formant: number      // formant shift (-1 à +1)
-  eq: EQBand[]         // bandes EQ
-  compression: CompConfig
-  saturation: number   // 0 à 1
-  reverb?: ReverbConfig
-  bitcrush?: number    // 1 à 16 bits
-  chorus?: ChorusConfig
+// ─── BASELINE VOICE CHAIN ────────────────────────────────────────────────────
+// HPF 80Hz + De-esser + Compression + Limiter
+// Appliqué à tous les effets pour cohérence pro
+async function applyBaselineChain(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length, buffer.sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+
+  // HPF 80Hz — supprime rumble de fond
+  const hpf = offlineCtx.createBiquadFilter()
+  hpf.type = 'highpass'
+  hpf.frequency.value = 80
+  hpf.Q.value = 0.7
+
+  // De-esser — atténue sibilance 6kHz
+  const deesser = offlineCtx.createBiquadFilter()
+  deesser.type = 'peaking'
+  deesser.frequency.value = 6000
+  deesser.gain.value = -4
+  deesser.Q.value = 2.0
+
+  // Compression stable
+  const comp = offlineCtx.createDynamicsCompressor()
+  comp.threshold.value = -18
+  comp.ratio.value = 3
+  comp.attack.value = 0.003
+  comp.release.value = 0.2
+  comp.knee.value = 6
+
+  // Limiter -1dB
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+  limiter.knee.value = 0
+
+  source.connect(hpf)
+  hpf.connect(deesser)
+  deesser.connect(comp)
+  comp.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
 }
 
-interface EQBand {
-  type: BiquadFilterType
-  freq: number
-  gain: number
-  Q?: number
-}
-
-interface CompConfig {
-  threshold: number
-  ratio: number
-  attack: number
-  release: number
-  knee: number
-}
-
-interface ReverbConfig {
-  duration: number
-  decay: number
-  wet: number
-}
-
-interface ChorusConfig {
-  rate: number
-  depth: number
-  wet: number
-}
-
-const DEFAULT_COMP: CompConfig = {
-  threshold: -20, ratio: 4, attack: 0.003,
-  release: 0.25, knee: 6
-}
-
-const DSP_PRESETS: Record<string, DSPConfig> = {
-  deep: {
-    pitch: -6, formant: -0.4,
-    eq: [
-      { type: 'lowshelf', freq: 200, gain: 6 },
-      { type: 'highshelf', freq: 4000, gain: -4 },
-      { type: 'peaking', freq: 800, gain: 3, Q: 1 },
-    ],
-    compression: { threshold: -18, ratio: 5, attack: 0.005, release: 0.3, knee: 8 },
-    saturation: 0.15,
-  },
-  demon: {
-    pitch: -12, formant: -0.7,
-    eq: [
-      { type: 'lowshelf', freq: 150, gain: 8 },
-      { type: 'peaking', freq: 400, gain: 4, Q: 0.8 },
-      { type: 'highshelf', freq: 5000, gain: -6 },
-    ],
-    compression: { threshold: -15, ratio: 6, attack: 0.003, release: 0.2, knee: 5 },
-    saturation: 0.4,
-    reverb: { duration: 0.8, decay: 0.6, wet: 0.2 },
-  },
-  giant: {
-    pitch: -10, formant: -0.6,
-    eq: [
-      { type: 'lowshelf', freq: 180, gain: 7 },
-      { type: 'peaking', freq: 350, gain: 3, Q: 1 },
-      { type: 'highshelf', freq: 6000, gain: -5 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.2,
-    reverb: { duration: 1.2, decay: 0.7, wet: 0.25 },
-  },
-  orc: {
-    pitch: -8, formant: -0.5,
-    eq: [
-      { type: 'lowshelf', freq: 200, gain: 5 },
-      { type: 'peaking', freq: 600, gain: 3, Q: 1.2 },
-      { type: 'highshelf', freq: 4000, gain: -3 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.3,
-  },
-  vampire: {
-    pitch: -5, formant: -0.3,
-    eq: [
-      { type: 'lowshelf', freq: 250, gain: 3 },
-      { type: 'peaking', freq: 1500, gain: -2, Q: 1 },
-      { type: 'highshelf', freq: 8000, gain: 2 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.1,
-    reverb: { duration: 1.5, decay: 0.8, wet: 0.3 },
-  },
-  dragon: {
-    pitch: -14, formant: -0.8,
-    eq: [
-      { type: 'lowshelf', freq: 120, gain: 10 },
-      { type: 'peaking', freq: 300, gain: 5, Q: 0.7 },
-      { type: 'highshelf', freq: 3000, gain: -8 },
-    ],
-    compression: { threshold: -12, ratio: 8, attack: 0.002, release: 0.15, knee: 4 },
-    saturation: 0.5,
-    reverb: { duration: 2.0, decay: 0.85, wet: 0.35 },
-  },
-  goblin: {
-    pitch: 5, formant: 0.4,
-    eq: [
-      { type: 'highshelf', freq: 3000, gain: 4 },
-      { type: 'peaking', freq: 800, gain: 2, Q: 1.5 },
-      { type: 'lowshelf', freq: 200, gain: -3 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.25,
-  },
-  chipmunk: {
-    pitch: 10, formant: 0.6,
-    eq: [
-      { type: 'highshelf', freq: 2000, gain: 5 },
-      { type: 'lowshelf', freq: 300, gain: -4 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.05,
-  },
-  minion: {
-    pitch: 8, formant: 0.5,
-    eq: [
-      { type: 'highshelf', freq: 2500, gain: 4 },
-      { type: 'peaking', freq: 1000, gain: 2, Q: 1 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.1,
-  },
-  helium: {
-    pitch: 14, formant: 0.8,
-    eq: [
-      { type: 'highshelf', freq: 1500, gain: 6 },
-      { type: 'lowshelf', freq: 400, gain: -5 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.02,
-  },
-  elf: {
-    pitch: 6, formant: 0.35,
-    eq: [
-      { type: 'highshelf', freq: 3000, gain: 3 },
-      { type: 'peaking', freq: 1200, gain: 2, Q: 1 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.05,
-    reverb: { duration: 0.5, decay: 0.4, wet: 0.15 },
-  },
-  angel: {
-    pitch: 9, formant: 0.5,
-    eq: [
-      { type: 'highshelf', freq: 4000, gain: 4 },
-      { type: 'lowshelf', freq: 300, gain: -2 },
-    ],
-    compression: DEFAULT_COMP,
-    saturation: 0.02,
-    reverb: { duration: 2.0, decay: 0.9, wet: 0.4 },
-  },
-  pitch_up1: {
-    pitch: 3, formant: 0,
-    eq: [], compression: DEFAULT_COMP, saturation: 0,
-  },
-  pitch_up2: {
-    pitch: 6, formant: 0,
-    eq: [], compression: DEFAULT_COMP, saturation: 0,
-  },
-  pitch_down1: {
-    pitch: -3, formant: 0,
-    eq: [], compression: DEFAULT_COMP, saturation: 0,
-  },
-  pitch_down2: {
-    pitch: -6, formant: 0,
-    eq: [], compression: DEFAULT_COMP, saturation: 0,
-  },
-  drunk: {
-    pitch: -1, formant: -0.1,
-    eq: [
-      { type: 'lowshelf', freq: 300, gain: 2 },
-      { type: 'peaking', freq: 1000, gain: -1, Q: 2 },
-    ],
-    compression: { threshold: -25, ratio: 3, attack: 0.01, release: 0.4, knee: 10 },
-    saturation: 0.08,
-    chorus: { rate: 2, depth: 0.3, wet: 0.2 },
-  },
-}
-
-// ─── SOUNDTOUCH PITCH + FORMANT ───────────────────────────────────────────────
+// ─── SOUNDTOUCH ───────────────────────────────────────────────────────────────
 async function applySoundTouch(
   buffer: AudioBuffer,
   semitones: number,
@@ -271,7 +125,6 @@ async function applySoundTouch(
     soundTouch.pitch = Math.pow(2, semitones / 12)
     soundTouch.tempo = 1.0
 
-    // Formant shift via pitch + tempo combinés
     if (formantShift !== 0) {
       const formantFactor = Math.pow(2, formantShift * 3 / 12)
       soundTouch.pitch = soundTouch.pitch * formantFactor
@@ -331,101 +184,38 @@ async function applySoundTouch(
       }
     }
     return outBuffer
-  } catch (err) {
-    console.warn('SoundTouch failed, fallback:', err)
-    const rate = Math.pow(2, semitones / 12)
-    return applyPitchShiftBasic(buffer, rate)
+  } catch {
+    return applyPitchShiftBasic(buffer, Math.pow(2, semitones / 12))
   }
 }
 
-// ─── EQ ──────────────────────────────────────────────────────────────────────
-async function applyEQ(buffer: AudioBuffer, bands: EQBand[]): Promise<AudioBuffer> {
-  if (bands.length === 0) return buffer
-
-  const offlineCtx = new OfflineAudioContext(
-    buffer.numberOfChannels, buffer.length, buffer.sampleRate
-  )
+// ─── UTILITAIRES DSP ─────────────────────────────────────────────────────────
+async function applyPitchShiftBasic(buffer: AudioBuffer, rate: number): Promise<AudioBuffer> {
+  const length = Math.max(1, Math.floor(buffer.length / rate))
+  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, length, buffer.sampleRate)
   const source = offlineCtx.createBufferSource()
   source.buffer = buffer
-
-  let lastNode: AudioNode = source
-  for (const band of bands) {
-    const filter = offlineCtx.createBiquadFilter()
-    filter.type = band.type
-    filter.frequency.value = band.freq
-    filter.gain.value = band.gain
-    if (band.Q) filter.Q.value = band.Q
-    lastNode.connect(filter)
-    lastNode = filter
-  }
-
-  lastNode.connect(offlineCtx.destination)
+  source.playbackRate.value = rate
+  source.connect(offlineCtx.destination)
   source.start()
   return offlineCtx.startRendering()
 }
 
-// ─── COMPRESSION ─────────────────────────────────────────────────────────────
-async function applyCompression(buffer: AudioBuffer, config: CompConfig): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(
-    buffer.numberOfChannels, buffer.length, buffer.sampleRate
-  )
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-
-  const comp = offlineCtx.createDynamicsCompressor()
-  comp.threshold.value = config.threshold
-  comp.ratio.value = config.ratio
-  comp.attack.value = config.attack
-  comp.release.value = config.release
-  comp.knee.value = config.knee
-
-  source.connect(comp)
-  comp.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-// ─── SATURATION ──────────────────────────────────────────────────────────────
-async function applySaturation(buffer: AudioBuffer, amount: number): Promise<AudioBuffer> {
-  if (amount <= 0) return buffer
-
-  const offlineCtx = new OfflineAudioContext(
-    buffer.numberOfChannels, buffer.length, buffer.sampleRate
-  )
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-
-  const waveshaper = offlineCtx.createWaveShaper()
-  const curve = new Float32Array(512)
-  const k = amount * 100
-  for (let i = 0; i < 512; i++) {
-    const x = (i * 2) / 512 - 1
-    curve[i] = ((Math.PI + k) * x) / (Math.PI + k * Math.abs(x))
-  }
-  waveshaper.curve = curve
-  waveshaper.oversample = '4x'
-
-  source.connect(waveshaper)
-  waveshaper.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-// ─── REVERB ──────────────────────────────────────────────────────────────────
 async function applyReverb(
   buffer: AudioBuffer,
   duration: number,
   decay: number,
-  wet: number = 0.5
+  wet: number = 0.5,
+  preDelay: number = 0
 ): Promise<AudioBuffer> {
-  const extraSamples = Math.floor(duration * buffer.sampleRate)
+  const extraSamples = Math.floor((duration + preDelay) * buffer.sampleRate)
   const offlineCtx = new OfflineAudioContext(
     buffer.numberOfChannels,
     buffer.length + extraSamples,
     buffer.sampleRate
   )
 
-  const impulseLength = Math.max(1, extraSamples)
+  const impulseLength = Math.max(1, Math.floor(duration * buffer.sampleRate))
   const impulse = offlineCtx.createBuffer(2, impulseLength, buffer.sampleRate)
   for (let c = 0; c < 2; c++) {
     const channelData = impulse.getChannelData(c)
@@ -445,8 +235,13 @@ async function applyReverb(
   const wetGain = offlineCtx.createGain()
   wetGain.gain.value = wet
 
+  // Pre-delay
+  const preDelayNode = offlineCtx.createDelay(Math.max(preDelay, 0.001))
+  preDelayNode.delayTime.value = preDelay
+
   source.connect(dryGain)
-  source.connect(convolver)
+  source.connect(preDelayNode)
+  preDelayNode.connect(convolver)
   convolver.connect(wetGain)
   dryGain.connect(offlineCtx.destination)
   wetGain.connect(offlineCtx.destination)
@@ -454,467 +249,1089 @@ async function applyReverb(
   return offlineCtx.startRendering()
 }
 
-// ─── CHORUS ──────────────────────────────────────────────────────────────────
-async function applyChorus(buffer: AudioBuffer, config: ChorusConfig): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(
-    buffer.numberOfChannels, buffer.length, buffer.sampleRate
-  )
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-
-  const delay = offlineCtx.createDelay(0.1)
-  delay.delayTime.value = 0.025
-
-  const lfo = offlineCtx.createOscillator()
-  lfo.frequency.value = config.rate
-  const lfoGain = offlineCtx.createGain()
-  lfoGain.gain.value = config.depth * 0.01
-
-  lfo.connect(lfoGain)
-  lfoGain.connect(delay.delayTime)
-
-  const dryGain = offlineCtx.createGain()
-  dryGain.gain.value = 1 - config.wet * 0.5
-  const wetGain = offlineCtx.createGain()
-  wetGain.gain.value = config.wet
-
-  source.connect(dryGain)
-  source.connect(delay)
-  delay.connect(wetGain)
-  dryGain.connect(offlineCtx.destination)
-  wetGain.connect(offlineCtx.destination)
-
-  lfo.start()
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-// ─── MOTEUR DSP PRINCIPAL ────────────────────────────────────────────────────
-async function applyDSP(buffer: AudioBuffer, config: DSPConfig): Promise<AudioBuffer> {
-  let result = buffer
-
-  // 1. Pitch + Formant (SoundTouch)
-  if (config.pitch !== 0 || config.formant !== 0) {
-    result = await applySoundTouch(result, config.pitch, config.formant)
-  }
-
-  // 2. EQ
-  if (config.eq && config.eq.length > 0) {
-    result = await applyEQ(result, config.eq)
-  }
-
-  // 3. Compression
-  result = await applyCompression(result, config.compression)
-
-  // 4. Saturation
-  if (config.saturation > 0) {
-    result = await applySaturation(result, config.saturation)
-  }
-
-  // 5. Chorus
-  if (config.chorus) {
-    result = await applyChorus(result, config.chorus)
-  }
-
-  // 6. Reverb
-  if (config.reverb) {
-    result = await applyReverb(result, config.reverb.duration, config.reverb.decay, config.reverb.wet)
-  }
-
-  return result
-}
-
-// ─── EXPORT PRINCIPAL ────────────────────────────────────────────────────────
-export async function applyVoiceEffect(
-  audioBuffer: AudioBuffer,
-  effectId: string
-): Promise<AudioBuffer> {
-  // Effets avec preset DSP complet
-  if (DSP_PRESETS[effectId]) {
-    return applyDSP(audioBuffer, DSP_PRESETS[effectId])
-  }
-
-  switch (effectId) {
-    case 'normal': return audioBuffer
-    case 'speed_up': return applyPitchShiftBasic(audioBuffer, 1.4)
-    case 'slow_down': return applyPitchShiftBasic(audioBuffer, 0.7)
-    case 'robot': return applyRobotEffect(audioBuffer)
-    case 'cyborg': return applyCyborgEffect(audioBuffer)
-    case 'android': return applyAndroidEffect(audioBuffer)
-    case '8bit': return apply8BitEffect(audioBuffer)
-    case 'glitch': return applyGlitchEffect(audioBuffer)
-    case 'buzz': return applyBuzzEffect(audioBuffer)
-    case 'jarvis': return applyJarvisEffect(audioBuffer)
-    case 'terminator': {
-      const p = await applySoundTouch(audioBuffer, -8, -0.4)
-      return applyRobotEffect(p)
-    }
-    case 'radio': return applyRadioEffect(audioBuffer, 800, 3000)
-    case 'walkie': return applyRadioEffect(audioBuffer, 600, 2500)
-    case 'telephone': return applyRadioEffect(audioBuffer, 500, 3500)
-    case 'intercom': return applyRadioEffect(audioBuffer, 400, 4000)
-    case 'megaphone': return applyMegaphoneEffect(audioBuffer)
-    case 'echo': return applyReverb(audioBuffer, 0.6, 0.5, 0.5)
-    case 'cave': return applyReverb(audioBuffer, 1.0, 0.7, 0.6)
-    case 'church': return applyReverb(audioBuffer, 2.5, 0.8, 0.65)
-    case 'stadium': return applyReverb(audioBuffer, 1.8, 0.6, 0.55)
-    case 'tunnel': return applyReverb(audioBuffer, 1.2, 0.75, 0.6)
-    case 'space': return applyReverb(audioBuffer, 4.0, 0.95, 0.8)
-    case 'forest': return applyReverb(audioBuffer, 0.4, 0.3, 0.3)
-    case 'reverse_echo': return applyReverb(audioBuffer, 0.8, 0.6, 0.5)
-    case 'underwater': return applyUnderwaterEffect(audioBuffer)
-    case 'whisper': return applyWhisperEffect(audioBuffer)
-    case 'alien': return applyAlienEffect(audioBuffer)
-    case 'ghost': {
-      const r = await applyReverb(audioBuffer, 2.0, 0.9, 0.7)
-      return applySoundTouch(r, -4, -0.2)
-    }
-    case 'synthwave': {
-      const r = await applyReverb(audioBuffer, 0.5, 0.4, 0.4)
-      return applyRadioEffect(r, 200, 8000)
-    }
-    case 'tremolo': return applyTremoloEffect(audioBuffer)
-    case 'vibrato': return applyVibratoEffect(audioBuffer)
-    case 'flanger': return applyFlangerEffect(audioBuffer)
-    default: return audioBuffer
-  }
-}
-
-// ─── EFFETS SPÉCIAUX ──────────────────────────────────────────────────────────
-async function applyPitchShiftBasic(buffer: AudioBuffer, rate: number): Promise<AudioBuffer> {
-  const length = Math.max(1, Math.floor(buffer.length / rate))
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, length, buffer.sampleRate)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-  source.playbackRate.value = rate
-  source.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
+// ─── 🤖 ROBOT — Ring modulation + bandpass + intelligibilité ─────────────────
 async function applyRobotEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+  const sampleRate = buffer.sampleRate
+  const length = buffer.length
+  const channels = buffer.numberOfChannels
+
+  // Ring modulation manuelle (carrier sinusoïdal 100Hz)
+  const ringModBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  const carrierFreq = 100
+  for (let c = 0; c < channels; c++) {
+    const input = buffer.getChannelData(c)
+    const output = ringModBuffer.getChannelData(c)
+    for (let i = 0; i < length; i++) {
+      const carrier = Math.sin(2 * Math.PI * carrierFreq * i / sampleRate)
+      output[i] = input[i] * carrier
+    }
+  }
+
+  const offlineCtx = new OfflineAudioContext(channels, length, sampleRate)
   const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
+  source.buffer = ringModBuffer
 
+  // HPF 80Hz baseline
+  const hpf = offlineCtx.createBiquadFilter()
+  hpf.type = 'highpass'
+  hpf.frequency.value = 80
+
+  // Bandpass 300Hz–3kHz pour intelligibilité
+  const bp = offlineCtx.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 1200
+  bp.Q.value = 0.8
+
+  // Boost métal 3kHz
+  const peak = offlineCtx.createBiquadFilter()
+  peak.type = 'peaking'
+  peak.frequency.value = 3000
+  peak.gain.value = 5
+  peak.Q.value = 2
+
+  // Compression forte
   const comp = offlineCtx.createDynamicsCompressor()
-  comp.threshold.value = -20
-  comp.ratio.value = 6
+  comp.threshold.value = -15
+  comp.ratio.value = 8
+  comp.attack.value = 0.001
+  comp.release.value = 0.1
 
+  // Limiter
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(hpf)
+  hpf.connect(bp)
+  bp.connect(peak)
+  peak.connect(comp)
+  comp.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── 👹 DEMON — Sub harmonics + growl LFO + saturation multi-layer ───────────
+async function applyDemonEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const pitched = await applySoundTouch(buffer, -12, -0.7)
+  const sampleRate = pitched.sampleRate
+  const length = pitched.length
+  const channels = pitched.numberOfChannels
+
+  // Sub harmonics — octave en dessous
+  const subBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  for (let c = 0; c < channels; c++) {
+    const input = pitched.getChannelData(c)
+    const output = subBuffer.getChannelData(c)
+    for (let i = 0; i < length; i++) {
+      // Mix dry + sub harmonique (pitch /2)
+      const subIdx = Math.floor(i / 2)
+      const sub = subIdx < length ? input[subIdx] * 0.4 : 0
+      output[i] = input[i] * 0.7 + sub
+    }
+  }
+
+  const offlineCtx = new OfflineAudioContext(channels, length + Math.floor(sampleRate * 0.8), sampleRate)
+  const source = offlineCtx.createBufferSource()
+  source.buffer = subBuffer
+
+  // EQ — boost graves + cut médiums
+  const lowBoost = offlineCtx.createBiquadFilter()
+  lowBoost.type = 'lowshelf'
+  lowBoost.frequency.value = 120
+  lowBoost.gain.value = 9
+
+  const midCut = offlineCtx.createBiquadFilter()
+  midCut.type = 'peaking'
+  midCut.frequency.value = 2500
+  midCut.gain.value = -6
+  midCut.Q.value = 1
+
+  // Growl LFO (amplitude modulation lente)
+  const growlGain = offlineCtx.createGain()
+  growlGain.gain.value = 0.85
+  const growlLFO = offlineCtx.createOscillator()
+  growlLFO.frequency.value = 3.5
+  const growlLFOGain = offlineCtx.createGain()
+  growlLFOGain.gain.value = 0.12
+  growlLFO.connect(growlLFOGain)
+  growlLFOGain.connect(growlGain.gain)
+
+  // Saturation multi-layer
   const distortion = offlineCtx.createWaveShaper()
   const curve = new Float32Array(512)
   for (let i = 0; i < 512; i++) {
     const x = (i * 2) / 512 - 1
-    curve[i] = Math.sign(x) * Math.pow(Math.abs(x), 0.25)
+    curve[i] = Math.tanh(x * 3) * 0.7 + Math.sign(x) * Math.pow(Math.abs(x), 0.6) * 0.3
   }
   distortion.curve = curve
+  distortion.oversample = '4x'
 
-  const filter1 = offlineCtx.createBiquadFilter()
-  filter1.type = 'bandpass'
-  filter1.frequency.value = 1200
-  filter1.Q.value = 1.5
-
-  const filter2 = offlineCtx.createBiquadFilter()
-  filter2.type = 'peaking'
-  filter2.frequency.value = 3000
-  filter2.gain.value = 6
-  filter2.Q.value = 2
-
-  source.connect(comp)
-  comp.connect(distortion)
-  distortion.connect(filter1)
-  filter1.connect(filter2)
-  filter2.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-async function applyCyborgEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const pitched = await applySoundTouch(buffer, -2, -0.1)
-  return applyRobotEffect(pitched)
-}
-
-async function applyAndroidEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const pitched = await applySoundTouch(buffer, 1, 0.1)
-  return applyRobotEffect(pitched)
-}
-
-async function apply8BitEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-
-  const waveshaper = offlineCtx.createWaveShaper()
-  const bits = 8
-  const steps = Math.pow(2, bits)
-  const curve = new Float32Array(512)
-  for (let i = 0; i < 512; i++) {
-    const x = (i * 2) / 512 - 1
-    curve[i] = Math.round(x * steps) / steps
-  }
-  waveshaper.curve = curve
-
-  const filter = offlineCtx.createBiquadFilter()
-  filter.type = 'lowpass'
-  filter.frequency.value = 4000
-
-  source.connect(waveshaper)
-  waveshaper.connect(filter)
-  filter.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-async function applyGlitchEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-
-  const waveshaper = offlineCtx.createWaveShaper()
-  const curve = new Float32Array(512)
-  for (let i = 0; i < 512; i++) {
-    const x = (i * 2) / 512 - 1
-    curve[i] = Math.random() > 0.97 ? x * 4 : x
-  }
-  waveshaper.curve = curve
-
-  const filter = offlineCtx.createBiquadFilter()
-  filter.type = 'highpass'
-  filter.frequency.value = 800
-
-  source.connect(waveshaper)
-  waveshaper.connect(filter)
-  filter.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-async function applyBuzzEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-
-  const waveshaper = offlineCtx.createWaveShaper()
-  const curve = new Float32Array(512)
-  for (let i = 0; i < 512; i++) {
-    const x = (i * 2) / 512 - 1
-    curve[i] = Math.tanh(x * 15)
-  }
-  waveshaper.curve = curve
-  waveshaper.oversample = '4x'
-
+  // Compression
   const comp = offlineCtx.createDynamicsCompressor()
-  comp.threshold.value = -10
-  comp.ratio.value = 8
+  comp.threshold.value = -12
+  comp.ratio.value = 6
+  comp.attack.value = 0.003
+  comp.release.value = 0.15
 
-  source.connect(waveshaper)
-  waveshaper.connect(comp)
-  comp.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-async function applyJarvisEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const pitched = await applySoundTouch(buffer, 1, 0.1)
-  const offlineCtx = new OfflineAudioContext(pitched.numberOfChannels, pitched.length, pitched.sampleRate)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = pitched
-
-  const hp = offlineCtx.createBiquadFilter()
-  hp.type = 'highpass'
-  hp.frequency.value = 250
-
-  const lp = offlineCtx.createBiquadFilter()
-  lp.type = 'lowpass'
-  lp.frequency.value = 7000
-
-  const peak = offlineCtx.createBiquadFilter()
-  peak.type = 'peaking'
-  peak.frequency.value = 3500
-  peak.gain.value = 4
-  peak.Q.value = 1.5
-
-  const comp = offlineCtx.createDynamicsCompressor()
-  comp.threshold.value = -15
-  comp.ratio.value = 4
-
-  source.connect(hp)
-  hp.connect(lp)
-  lp.connect(peak)
-  peak.connect(comp)
-  comp.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-async function applyRadioEffect(buffer: AudioBuffer, hpFreq: number, lpFreq: number): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-
-  const hp = offlineCtx.createBiquadFilter()
-  hp.type = 'highpass'
-  hp.frequency.value = hpFreq
-
-  const lp = offlineCtx.createBiquadFilter()
-  lp.type = 'lowpass'
-  lp.frequency.value = lpFreq
-
-  const waveshaper = offlineCtx.createWaveShaper()
-  const curve = new Float32Array(512)
-  for (let i = 0; i < 512; i++) {
-    const x = (i * 2) / 512 - 1
-    curve[i] = (Math.PI + 60) * x / (Math.PI + 60 * Math.abs(x))
+  // Reverb sombre
+  const impulseLength = Math.floor(sampleRate * 0.8)
+  const impulse = offlineCtx.createBuffer(2, impulseLength, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < impulseLength; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 4)
+    }
   }
-  waveshaper.curve = curve
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
 
-  const comp = offlineCtx.createDynamicsCompressor()
-  comp.threshold.value = -15
-  comp.ratio.value = 5
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.8
+  const wetGain = offlineCtx.createGain()
+  wetGain.gain.value = 0.2
 
-  source.connect(hp)
-  hp.connect(lp)
-  lp.connect(waveshaper)
-  waveshaper.connect(comp)
-  comp.connect(offlineCtx.destination)
+  // Limiter
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(lowBoost)
+  lowBoost.connect(midCut)
+  midCut.connect(growlGain)
+  growlGain.connect(distortion)
+  distortion.connect(comp)
+  comp.connect(dryGain)
+  comp.connect(convolver)
+  convolver.connect(wetGain)
+  dryGain.connect(limiter)
+  wetGain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+
+  growlLFO.start()
   source.start()
   return offlineCtx.startRendering()
 }
 
-async function applyMegaphoneEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+// ─── 🐉 DRAGON — Massif + dark reverb + delay ────────────────────────────────
+async function applyDragonEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const pitched = await applySoundTouch(buffer, -14, -0.8)
+  const sampleRate = pitched.sampleRate
+  const length = pitched.length
+  const channels = pitched.numberOfChannels
+
+  // Sub harmonics massifs
+  const subBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  for (let c = 0; c < channels; c++) {
+    const input = pitched.getChannelData(c)
+    const output = subBuffer.getChannelData(c)
+    for (let i = 0; i < length; i++) {
+      const subIdx = Math.floor(i / 2)
+      const sub = subIdx < length ? input[subIdx] * 0.5 : 0
+      output[i] = input[i] * 0.6 + sub
+    }
+  }
+
+  const reverbLen = Math.floor(sampleRate * 2.5)
+  const offlineCtx = new OfflineAudioContext(channels, length + reverbLen, sampleRate)
   const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
+  source.buffer = subBuffer
 
-  const hp = offlineCtx.createBiquadFilter()
-  hp.type = 'highpass'
-  hp.frequency.value = 400
+  // EQ très graves + cut hauts
+  const lowBoost = offlineCtx.createBiquadFilter()
+  lowBoost.type = 'lowshelf'
+  lowBoost.frequency.value = 100
+  lowBoost.gain.value = 12
 
-  const lp = offlineCtx.createBiquadFilter()
-  lp.type = 'lowpass'
-  lp.frequency.value = 4000
+  const midBoost = offlineCtx.createBiquadFilter()
+  midBoost.type = 'peaking'
+  midBoost.frequency.value = 280
+  midBoost.gain.value = 6
+  midBoost.Q.value = 0.7
 
-  const waveshaper = offlineCtx.createWaveShaper()
+  const highCut = offlineCtx.createBiquadFilter()
+  highCut.type = 'highshelf'
+  highCut.frequency.value = 2500
+  highCut.gain.value = -10
+
+  // Saturation massive
+  const distortion = offlineCtx.createWaveShaper()
   const curve = new Float32Array(512)
   for (let i = 0; i < 512; i++) {
     const x = (i * 2) / 512 - 1
     curve[i] = Math.tanh(x * 5)
   }
-  waveshaper.curve = curve
+  distortion.curve = curve
+  distortion.oversample = '4x'
 
+  // Compression agressive
   const comp = offlineCtx.createDynamicsCompressor()
   comp.threshold.value = -10
   comp.ratio.value = 10
   comp.attack.value = 0.001
   comp.release.value = 0.1
 
-  source.connect(hp)
-  hp.connect(lp)
-  lp.connect(waveshaper)
-  waveshaper.connect(comp)
-  comp.connect(offlineCtx.destination)
+  // Reverb longue + sombre
+  const impulse = offlineCtx.createBuffer(2, reverbLen, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < reverbLen; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 6)
+    }
+  }
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.7
+  const wetGain = offlineCtx.createGain()
+  wetGain.gain.value = 0.35
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(lowBoost)
+  lowBoost.connect(midBoost)
+  midBoost.connect(highCut)
+  highCut.connect(distortion)
+  distortion.connect(comp)
+  comp.connect(dryGain)
+  comp.connect(convolver)
+  convolver.connect(wetGain)
+  dryGain.connect(limiter)
+  wetGain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
   source.start()
   return offlineCtx.startRendering()
 }
 
-async function applyUnderwaterEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+// ─── 👻 GHOST — Shimmer reverb + stereo wide + éthéré ────────────────────────
+async function applyGhostEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const pitched = await applySoundTouch(buffer, -4, -0.2)
+  const sampleRate = pitched.sampleRate
+  const reverbLen = Math.floor(sampleRate * 2.5)
+  const offlineCtx = new OfflineAudioContext(
+    pitched.numberOfChannels,
+    pitched.length + reverbLen,
+    sampleRate
+  )
   const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
+  source.buffer = pitched
 
+  // HPF léger
+  const hpf = offlineCtx.createBiquadFilter()
+  hpf.type = 'highpass'
+  hpf.frequency.value = 120
+
+  // Shimmer — pitch shift dans la reverb
+  const shimmerGain = offlineCtx.createGain()
+  shimmerGain.gain.value = 0.3
+
+  // Reverb longue
+  const impulse = offlineCtx.createBuffer(2, reverbLen, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < reverbLen; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 8)
+    }
+  }
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
+
+  // Chorus léger pour shimmer
+  const chorusDelay = offlineCtx.createDelay(0.05)
+  chorusDelay.delayTime.value = 0.03
+  const chorusLFO = offlineCtx.createOscillator()
+  chorusLFO.frequency.value = 0.5
+  const chorusLFOGain = offlineCtx.createGain()
+  chorusLFOGain.gain.value = 0.008
+  chorusLFO.connect(chorusLFOGain)
+  chorusLFOGain.connect(chorusDelay.delayTime)
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.5
+  const wetGain = offlineCtx.createGain()
+  wetGain.gain.value = 0.6
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(hpf)
+  hpf.connect(dryGain)
+  hpf.connect(chorusDelay)
+  chorusDelay.connect(convolver)
+  convolver.connect(wetGain)
+  dryGain.connect(limiter)
+  wetGain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+
+  chorusLFO.start()
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── 👼 ANGEL — Air boost + shimmer + reverb douce ───────────────────────────
+async function applyAngelEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const pitched = await applySoundTouch(buffer, 9, 0.5)
+  const sampleRate = pitched.sampleRate
+  const reverbLen = Math.floor(sampleRate * 2.2)
+  const offlineCtx = new OfflineAudioContext(
+    pitched.numberOfChannels,
+    pitched.length + reverbLen,
+    sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = pitched
+
+  // HPF baseline
+  const hpf = offlineCtx.createBiquadFilter()
+  hpf.type = 'highpass'
+  hpf.frequency.value = 100
+
+  // Air boost 10kHz
+  const airBoost = offlineCtx.createBiquadFilter()
+  airBoost.type = 'highshelf'
+  airBoost.frequency.value = 10000
+  airBoost.gain.value = 5
+
+  // De-esser
+  const deesser = offlineCtx.createBiquadFilter()
+  deesser.type = 'peaking'
+  deesser.frequency.value = 7000
+  deesser.gain.value = -3
+  deesser.Q.value = 2
+
+  // Compression douce
+  const comp = offlineCtx.createDynamicsCompressor()
+  comp.threshold.value = -20
+  comp.ratio.value = 2.5
+  comp.attack.value = 0.01
+  comp.release.value = 0.3
+
+  // Chorus shimmer
+  const chorusDelay = offlineCtx.createDelay(0.05)
+  chorusDelay.delayTime.value = 0.025
+  const chorusLFO = offlineCtx.createOscillator()
+  chorusLFO.frequency.value = 0.8
+  const chorusLFOGain = offlineCtx.createGain()
+  chorusLFOGain.gain.value = 0.006
+  chorusLFO.connect(chorusLFOGain)
+  chorusLFOGain.connect(chorusDelay.delayTime)
+
+  // Reverb longue
+  const impulse = offlineCtx.createBuffer(2, reverbLen, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < reverbLen; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 10)
+    }
+  }
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.6
+  const chorusWet = offlineCtx.createGain()
+  chorusWet.gain.value = 0.25
+  const reverbWet = offlineCtx.createGain()
+  reverbWet.gain.value = 0.45
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(hpf)
+  hpf.connect(airBoost)
+  airBoost.connect(deesser)
+  deesser.connect(comp)
+  comp.connect(dryGain)
+  comp.connect(chorusDelay)
+  chorusDelay.connect(chorusWet)
+  comp.connect(convolver)
+  convolver.connect(reverbWet)
+  dryGain.connect(limiter)
+  chorusWet.connect(limiter)
+  reverbWet.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+
+  chorusLFO.start()
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── 🌊 UNDERWATER — LFO filter + phaser + reverb courte ─────────────────────
+async function applyUnderwaterEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const length = buffer.length
+  const channels = buffer.numberOfChannels
+
+  // Filtre mouvant manuel (LFO sur cutoff)
+  const filteredBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  const lfoRate = 1.5
+  const baseFreq = 400
+  const lfoDepth = 250
+
+  for (let c = 0; c < channels; c++) {
+    const input = buffer.getChannelData(c)
+    const output = filteredBuffer.getChannelData(c)
+    let prevSample = 0
+    for (let i = 0; i < length; i++) {
+      const lfo = Math.sin(2 * Math.PI * lfoRate * i / sampleRate)
+      const cutoff = (baseFreq + lfo * lfoDepth) / sampleRate
+      const alpha = Math.min(1, Math.max(0, cutoff * 2 * Math.PI))
+      prevSample = prevSample + alpha * (input[i] - prevSample)
+      output[i] = prevSample
+    }
+  }
+
+  const offlineCtx = new OfflineAudioContext(channels, length + Math.floor(sampleRate * 0.3), sampleRate)
+  const source = offlineCtx.createBufferSource()
+  source.buffer = filteredBuffer
+
+  // Double lowpass pour immersion
   const lp1 = offlineCtx.createBiquadFilter()
   lp1.type = 'lowpass'
-  lp1.frequency.value = 500
-  lp1.Q.value = 5
+  lp1.frequency.value = 600
+  lp1.Q.value = 4
 
   const lp2 = offlineCtx.createBiquadFilter()
   lp2.type = 'lowpass'
-  lp2.frequency.value = 300
-  lp2.Q.value = 8
+  lp2.frequency.value = 400
+  lp2.Q.value = 6
+
+  // Chorus lent pour sensation liquide
+  const chorusDelay = offlineCtx.createDelay(0.05)
+  chorusDelay.delayTime.value = 0.02
+  const chorusLFO = offlineCtx.createOscillator()
+  chorusLFO.frequency.value = 0.3
+  const chorusLFOGain = offlineCtx.createGain()
+  chorusLFOGain.gain.value = 0.01
+  chorusLFO.connect(chorusLFOGain)
+  chorusLFOGain.connect(chorusDelay.delayTime)
+
+  // Reverb courte
+  const impulseLen = Math.floor(sampleRate * 0.3)
+  const impulse = offlineCtx.createBuffer(2, impulseLen, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < impulseLen; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLen, 2)
+    }
+  }
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.6
+  const chorusWet = offlineCtx.createGain()
+  chorusWet.gain.value = 0.3
+  const reverbWet = offlineCtx.createGain()
+  reverbWet.gain.value = 0.25
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
 
   source.connect(lp1)
   lp1.connect(lp2)
-  lp2.connect(offlineCtx.destination)
+  lp2.connect(dryGain)
+  lp2.connect(chorusDelay)
+  chorusDelay.connect(chorusWet)
+  lp2.connect(convolver)
+  convolver.connect(reverbWet)
+  dryGain.connect(limiter)
+  chorusWet.connect(limiter)
+  reverbWet.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+
+  chorusLFO.start()
   source.start()
   return offlineCtx.startRendering()
 }
 
+// ─── 📻 RADIO PRO — Bandpass + noise + saturation analogique ─────────────────
+async function applyRadioEffect(
+  buffer: AudioBuffer,
+  hpFreq: number,
+  lpFreq: number,
+  addNoise: boolean = true
+): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const length = buffer.length
+  const channels = buffer.numberOfChannels
+
+  // Ajouter bruit de fond léger (crackle radio)
+  let inputBuffer = buffer
+  if (addNoise) {
+    const noisyBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+    for (let c = 0; c < channels; c++) {
+      const input = buffer.getChannelData(c)
+      const output = noisyBuffer.getChannelData(c)
+      for (let i = 0; i < length; i++) {
+        const noise = (Math.random() * 2 - 1) * 0.015
+        output[i] = input[i] + noise
+      }
+    }
+    inputBuffer = noisyBuffer
+  }
+
+  const offlineCtx = new OfflineAudioContext(channels, length, sampleRate)
+  const source = offlineCtx.createBufferSource()
+  source.buffer = inputBuffer
+
+  // Bandpass dynamique
+  const hp = offlineCtx.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = hpFreq
+  hp.Q.value = 1.5
+
+  const lp = offlineCtx.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = lpFreq
+  lp.Q.value = 1.5
+
+  // Boost mid presence radio
+  const midBoost = offlineCtx.createBiquadFilter()
+  midBoost.type = 'peaking'
+  midBoost.frequency.value = 1800
+  midBoost.gain.value = 4
+  midBoost.Q.value = 1
+
+  // Saturation analogique légère
+  const waveshaper = offlineCtx.createWaveShaper()
+  const curve = new Float32Array(512)
+  for (let i = 0; i < 512; i++) {
+    const x = (i * 2) / 512 - 1
+    curve[i] = Math.tanh(x * 2.5) * 0.8
+  }
+  waveshaper.curve = curve
+
+  // Compression forte radio style
+  const comp = offlineCtx.createDynamicsCompressor()
+  comp.threshold.value = -12
+  comp.ratio.value = 8
+  comp.attack.value = 0.001
+  comp.release.value = 0.08
+  comp.knee.value = 2
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(hp)
+  hp.connect(lp)
+  lp.connect(midBoost)
+  midBoost.connect(waveshaper)
+  waveshaper.connect(comp)
+  comp.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── 🍺 DRUNK — Pitch wobble + jitter + chorus instable ──────────────────────
+async function applyDrunkEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const length = buffer.length
+  const channels = buffer.numberOfChannels
+
+  // Pitch wobble aléatoire
+  const wobbleBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  for (let c = 0; c < channels; c++) {
+    const input = buffer.getChannelData(c)
+    const output = wobbleBuffer.getChannelData(c)
+    for (let i = 0; i < length; i++) {
+      // Wobble lent + random
+      const wobble = Math.sin(2 * Math.PI * 0.8 * i / sampleRate) * 0.02
+      const jitter = (Math.random() - 0.5) * 0.005
+      const readPos = i * (1 + wobble + jitter)
+      const readIdx = Math.floor(readPos)
+      const frac = readPos - readIdx
+      const s0 = readIdx >= 0 && readIdx < length ? input[readIdx] : 0
+      const s1 = readIdx + 1 < length ? input[readIdx + 1] : 0
+      output[i] = s0 + frac * (s1 - s0)
+    }
+  }
+
+  const offlineCtx = new OfflineAudioContext(channels, length, sampleRate)
+  const source = offlineCtx.createBufferSource()
+  source.buffer = wobbleBuffer
+
+  // EQ légèrement chaud
+  const warmEQ = offlineCtx.createBiquadFilter()
+  warmEQ.type = 'lowshelf'
+  warmEQ.frequency.value = 300
+  warmEQ.gain.value = 2
+
+  // Chorus instable
+  const chorusDelay = offlineCtx.createDelay(0.1)
+  chorusDelay.delayTime.value = 0.03
+  const chorusLFO = offlineCtx.createOscillator()
+  chorusLFO.frequency.value = 1.8
+  const chorusLFOGain = offlineCtx.createGain()
+  chorusLFOGain.gain.value = 0.018
+  chorusLFO.connect(chorusLFOGain)
+  chorusLFOGain.connect(chorusDelay.delayTime)
+
+  // Compression lente (ivre)
+  const comp = offlineCtx.createDynamicsCompressor()
+  comp.threshold.value = -22
+  comp.ratio.value = 3
+  comp.attack.value = 0.02
+  comp.release.value = 0.5
+  comp.knee.value = 10
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.75
+  const wetGain = offlineCtx.createGain()
+  wetGain.gain.value = 0.3
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(warmEQ)
+  warmEQ.connect(comp)
+  comp.connect(dryGain)
+  comp.connect(chorusDelay)
+  chorusDelay.connect(wetGain)
+  dryGain.connect(limiter)
+  wetGain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+
+  chorusLFO.start()
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── 🎮 8-BIT — Downsample + bitcrush + aliasing contrôlé ────────────────────
+async function apply8BitEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const length = buffer.length
+  const channels = buffer.numberOfChannels
+
+  // Bitcrush 8-bit + downsample
+  const crushedBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  const bits = 8
+  const steps = Math.pow(2, bits - 1)
+  const downsampleFactor = 4 // simule 11kHz depuis 44kHz
+
+  for (let c = 0; c < channels; c++) {
+    const input = buffer.getChannelData(c)
+    const output = crushedBuffer.getChannelData(c)
+    let held = 0
+    for (let i = 0; i < length; i++) {
+      if (i % downsampleFactor === 0) {
+        held = Math.round(input[i] * steps) / steps
+      }
+      output[i] = held
+    }
+  }
+
+  const offlineCtx = new OfflineAudioContext(channels, length, sampleRate)
+  const source = offlineCtx.createBufferSource()
+  source.buffer = crushedBuffer
+
+  // Lowpass anti-aliasing contrôlé
+  const lp = offlineCtx.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 5500
+
+  // Léger boost pour clarté
+  const midBoost = offlineCtx.createBiquadFilter()
+  midBoost.type = 'peaking'
+  midBoost.frequency.value = 2000
+  midBoost.gain.value = 3
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(lp)
+  lp.connect(midBoost)
+  midBoost.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── ⚡ GLITCH — Stutter + dropout + reverse fragments ───────────────────────
+async function applyGlitchEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const length = buffer.length
+  const channels = buffer.numberOfChannels
+
+  const glitchBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  for (let c = 0; c < channels; c++) {
+    const input = buffer.getChannelData(c)
+    const output = glitchBuffer.getChannelData(c)
+    const chunkSize = Math.floor(sampleRate * 0.05) // chunks 50ms
+
+    for (let i = 0; i < length; i += chunkSize) {
+      const rand = Math.random()
+      for (let j = 0; j < chunkSize && i + j < length; j++) {
+        if (rand < 0.08) {
+          // Dropout — silence
+          output[i + j] = 0
+        } else if (rand < 0.15) {
+          // Reverse fragment
+          const revIdx = Math.min(length - 1, i + chunkSize - j)
+          output[i + j] = input[revIdx] || 0
+        } else if (rand < 0.2) {
+          // Stutter — répète le début du chunk
+          output[i + j] = input[i + (j % Math.floor(chunkSize / 4))] || 0
+        } else {
+          output[i + j] = input[i + j]
+        }
+      }
+    }
+  }
+
+  const offlineCtx = new OfflineAudioContext(channels, length, sampleRate)
+  const source = offlineCtx.createBufferSource()
+  source.buffer = glitchBuffer
+
+  // Highpass pour caractère digital
+  const hp = offlineCtx.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = 400
+
+  // Distortion numérique
+  const waveshaper = offlineCtx.createWaveShaper()
+  const curve = new Float32Array(512)
+  for (let i = 0; i < 512; i++) {
+    const x = (i * 2) / 512 - 1
+    curve[i] = Math.random() > 0.96 ? x * 3 : Math.tanh(x * 1.5)
+  }
+  waveshaper.curve = curve
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(hp)
+  hp.connect(waveshaper)
+  waveshaper.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── AMBIANCES PRO ────────────────────────────────────────────────────────────
+async function applyCaveEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const reverbLen = Math.floor(sampleRate * 1.2)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length + reverbLen, sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+
+  // Early reflections (slapback court)
+  const earlyDelay = offlineCtx.createDelay(0.1)
+  earlyDelay.delayTime.value = 0.035
+  const earlyGain = offlineCtx.createGain()
+  earlyGain.gain.value = 0.4
+
+  // Reverb moyenne
+  const impulse = offlineCtx.createBuffer(2, reverbLen, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < reverbLen; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 3)
+    }
+  }
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.7
+  const earlyWet = offlineCtx.createGain()
+  earlyWet.gain.value = 0.3
+  const lateWet = offlineCtx.createGain()
+  lateWet.gain.value = 0.5
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(dryGain)
+  source.connect(earlyDelay)
+  earlyDelay.connect(earlyGain)
+  earlyGain.connect(earlyWet)
+  source.connect(convolver)
+  convolver.connect(lateWet)
+  dryGain.connect(limiter)
+  earlyWet.connect(limiter)
+  lateWet.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+async function applyStadiumEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const reverbLen = Math.floor(sampleRate * 2.0)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length + reverbLen, sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+
+  // Slapback delay stadium
+  const slapDelay = offlineCtx.createDelay(0.2)
+  slapDelay.delayTime.value = 0.08
+  const slapGain = offlineCtx.createGain()
+  slapGain.gain.value = 0.35
+
+  // Double delay
+  const slapDelay2 = offlineCtx.createDelay(0.3)
+  slapDelay2.delayTime.value = 0.16
+  const slapGain2 = offlineCtx.createGain()
+  slapGain2.gain.value = 0.2
+
+  // Reverb longue
+  const impulse = offlineCtx.createBuffer(2, reverbLen, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < reverbLen; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 4)
+    }
+  }
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.65
+  const reverbWet = offlineCtx.createGain()
+  reverbWet.gain.value = 0.5
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(dryGain)
+  source.connect(slapDelay)
+  slapDelay.connect(slapGain)
+  slapGain.connect(limiter)
+  source.connect(slapDelay2)
+  slapDelay2.connect(slapGain2)
+  slapGain2.connect(limiter)
+  source.connect(convolver)
+  convolver.connect(reverbWet)
+  dryGain.connect(limiter)
+  reverbWet.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+async function applySpaceEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const sampleRate = buffer.sampleRate
+  const reverbLen = Math.floor(sampleRate * 4.5)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length + reverbLen, sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+
+  // EQ très dark — coupe les basses
+  const darkEQ = offlineCtx.createBiquadFilter()
+  darkEQ.type = 'highpass'
+  darkEQ.frequency.value = 200
+
+  // High cut
+  const highCut = offlineCtx.createBiquadFilter()
+  highCut.type = 'lowpass'
+  highCut.frequency.value = 4000
+
+  // Reverb énorme
+  const impulse = offlineCtx.createBuffer(2, reverbLen, sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c)
+    for (let i = 0; i < reverbLen; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 12)
+    }
+  }
+  const convolver = offlineCtx.createConvolver()
+  convolver.buffer = impulse
+
+  const dryGain = offlineCtx.createGain()
+  dryGain.gain.value = 0.3
+  const wetGain = offlineCtx.createGain()
+  wetGain.gain.value = 0.8
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(darkEQ)
+  darkEQ.connect(highCut)
+  highCut.connect(dryGain)
+  highCut.connect(convolver)
+  convolver.connect(wetGain)
+  dryGain.connect(limiter)
+  wetGain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── EFFETS SIMPLES AMÉLIORÉS ─────────────────────────────────────────────────
 async function applyWhisperEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length, buffer.sampleRate
+  )
   const source = offlineCtx.createBufferSource()
   source.buffer = buffer
 
   const hp = offlineCtx.createBiquadFilter()
   hp.type = 'highpass'
-  hp.frequency.value = 1500
+  hp.frequency.value = 1200
 
   const gain = offlineCtx.createGain()
-  gain.gain.value = 0.5
+  gain.gain.value = 0.45
+
+  // Bruit de souffle léger
+  const waveshaper = offlineCtx.createWaveShaper()
+  const curve = new Float32Array(512)
+  for (let i = 0; i < 512; i++) {
+    const x = (i * 2) / 512 - 1
+    curve[i] = x + (Math.random() - 0.5) * 0.04
+  }
+  waveshaper.curve = curve
+
+  const comp = offlineCtx.createDynamicsCompressor()
+  comp.threshold.value = -18
+  comp.ratio.value = 4
+  comp.attack.value = 0.005
+  comp.release.value = 0.2
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(hp)
+  hp.connect(waveshaper)
+  waveshaper.connect(comp)
+  comp.connect(gain)
+  gain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+async function applyMegaphoneEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length, buffer.sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+
+  const hp = offlineCtx.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = 500
+
+  const lp = offlineCtx.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 3500
+
+  const midBoost = offlineCtx.createBiquadFilter()
+  midBoost.type = 'peaking'
+  midBoost.frequency.value = 1500
+  midBoost.gain.value = 6
+  midBoost.Q.value = 1
 
   const waveshaper = offlineCtx.createWaveShaper()
   const curve = new Float32Array(512)
   for (let i = 0; i < 512; i++) {
     const x = (i * 2) / 512 - 1
-    curve[i] = x + (Math.random() - 0.5) * 0.05
+    curve[i] = Math.tanh(x * 4)
   }
   waveshaper.curve = curve
 
+  const comp = offlineCtx.createDynamicsCompressor()
+  comp.threshold.value = -8
+  comp.ratio.value = 12
+  comp.attack.value = 0.001
+  comp.release.value = 0.08
+  comp.knee.value = 2
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
   source.connect(hp)
-  hp.connect(waveshaper)
-  waveshaper.connect(gain)
-  gain.connect(offlineCtx.destination)
-  source.start()
-  return offlineCtx.startRendering()
-}
-
-async function applyAlienEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const pitched = await applySoundTouch(buffer, 4, 0.3)
-  const offlineCtx = new OfflineAudioContext(pitched.numberOfChannels, pitched.length, pitched.sampleRate)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = pitched
-
-  const f1 = offlineCtx.createBiquadFilter()
-  f1.type = 'bandpass'
-  f1.frequency.value = 600
-  f1.Q.value = 3
-
-  const f2 = offlineCtx.createBiquadFilter()
-  f2.type = 'bandpass'
-  f2.frequency.value = 2400
-  f2.Q.value = 3
-
-  const g1 = offlineCtx.createGain()
-  g1.gain.value = 0.5
-  const g2 = offlineCtx.createGain()
-  g2.gain.value = 0.5
-
-  source.connect(f1)
-  source.connect(f2)
-  f1.connect(g1)
-  f2.connect(g2)
-  g1.connect(offlineCtx.destination)
-  g2.connect(offlineCtx.destination)
+  hp.connect(lp)
+  lp.connect(midBoost)
+  midBoost.connect(waveshaper)
+  waveshaper.connect(comp)
+  comp.connect(limiter)
+  limiter.connect(offlineCtx.destination)
   source.start()
   return offlineCtx.startRendering()
 }
 
 async function applyTremoloEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length, buffer.sampleRate
+  )
   const source = offlineCtx.createBufferSource()
   source.buffer = buffer
 
   const gain = offlineCtx.createGain()
-  const lfo = offlineCtx.createOscillator()
-  const lfoGain = offlineCtx.createGain()
+  gain.gain.value = 0.85
 
-  lfo.frequency.value = 7
-  lfoGain.gain.value = 0.6
-  gain.gain.value = 0.8
+  const lfo = offlineCtx.createOscillator()
+  lfo.type = 'sine'
+  lfo.frequency.value = 6
+  const lfoGain = offlineCtx.createGain()
+  lfoGain.gain.value = 0.5 // depth modéré
 
   lfo.connect(lfoGain)
   lfoGain.connect(gain.gain)
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
   source.connect(gain)
-  gain.connect(offlineCtx.destination)
+  gain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
 
   lfo.start()
   source.start()
@@ -922,23 +1339,33 @@ async function applyTremoloEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
 }
 
 async function applyVibratoEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length, buffer.sampleRate
+  )
   const source = offlineCtx.createBufferSource()
   source.buffer = buffer
 
   const delay = offlineCtx.createDelay(0.05)
-  delay.delayTime.value = 0.02
+  delay.delayTime.value = 0.015
 
   const lfo = offlineCtx.createOscillator()
-  lfo.frequency.value = 6
+  lfo.type = 'sine'
+  lfo.frequency.value = 5.5
   const lfoGain = offlineCtx.createGain()
-  lfoGain.gain.value = 0.01
+  lfoGain.gain.value = 0.006 // depth limité
 
   lfo.connect(lfoGain)
   lfoGain.connect(delay.delayTime)
 
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
   source.connect(delay)
-  delay.connect(offlineCtx.destination)
+  delay.connect(limiter)
+  limiter.connect(offlineCtx.destination)
 
   lfo.start()
   source.start()
@@ -946,38 +1373,300 @@ async function applyVibratoEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
 }
 
 async function applyFlangerEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
-  const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length, buffer.sampleRate
+  )
   const source = offlineCtx.createBufferSource()
   source.buffer = buffer
 
   const delay = offlineCtx.createDelay(0.05)
-  delay.delayTime.value = 0.005
+  delay.delayTime.value = 0.004
 
   const lfo = offlineCtx.createOscillator()
-  lfo.frequency.value = 0.5
+  lfo.type = 'sine'
+  lfo.frequency.value = 0.4
   const lfoGain = offlineCtx.createGain()
-  lfoGain.gain.value = 0.003
+  lfoGain.gain.value = 0.002
 
   lfo.connect(lfoGain)
   lfoGain.connect(delay.delayTime)
 
+  // Feedback contrôlé
   const feedback = offlineCtx.createGain()
-  feedback.gain.value = 0.6
+  feedback.gain.value = 0.55
 
   const dryGain = offlineCtx.createGain()
   dryGain.gain.value = 0.7
   const wetGain = offlineCtx.createGain()
-  wetGain.gain.value = 0.3
+  wetGain.gain.value = 0.35
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
 
   source.connect(dryGain)
   source.connect(delay)
   delay.connect(feedback)
   feedback.connect(delay)
   delay.connect(wetGain)
-  dryGain.connect(offlineCtx.destination)
-  wetGain.connect(offlineCtx.destination)
+  dryGain.connect(limiter)
+  wetGain.connect(limiter)
+  limiter.connect(offlineCtx.destination)
 
   lfo.start()
   source.start()
   return offlineCtx.startRendering()
+}
+
+async function applyAlienEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const pitched = await applySoundTouch(buffer, 4, 0.3)
+  const offlineCtx = new OfflineAudioContext(
+    pitched.numberOfChannels, pitched.length, pitched.sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = pitched
+
+  // Ring mod alien
+  const ringFreq = 180
+  const sampleRate = pitched.sampleRate
+  const length = pitched.length
+  const channels = pitched.numberOfChannels
+  const ringBuffer = new AudioBuffer({ length, sampleRate, numberOfChannels: channels })
+  for (let c = 0; c < channels; c++) {
+    const input = pitched.getChannelData(c)
+    const output = ringBuffer.getChannelData(c)
+    for (let i = 0; i < length; i++) {
+      const carrier = Math.sin(2 * Math.PI * ringFreq * i / sampleRate)
+      output[i] = input[i] * carrier
+    }
+  }
+
+  const ringSource = offlineCtx.createBufferSource()
+  ringSource.buffer = ringBuffer
+
+  const f1 = offlineCtx.createBiquadFilter()
+  f1.type = 'bandpass'
+  f1.frequency.value = 800
+  f1.Q.value = 2
+
+  const f2 = offlineCtx.createBiquadFilter()
+  f2.type = 'bandpass'
+  f2.frequency.value = 3200
+  f2.Q.value = 2
+
+  const g1 = offlineCtx.createGain()
+  g1.gain.value = 0.5
+  const g2 = offlineCtx.createGain()
+  g2.gain.value = 0.5
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  ringSource.connect(f1)
+  ringSource.connect(f2)
+  f1.connect(g1)
+  f2.connect(g2)
+  g1.connect(limiter)
+  g2.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  ringSource.start()
+  return offlineCtx.startRendering()
+}
+
+async function applyJarvisEffect(buffer: AudioBuffer): Promise<AudioBuffer> {
+  const pitched = await applySoundTouch(buffer, 1, 0.1)
+  const offlineCtx = new OfflineAudioContext(
+    pitched.numberOfChannels, pitched.length, pitched.sampleRate
+  )
+  const source = offlineCtx.createBufferSource()
+  source.buffer = pitched
+
+  const hp = offlineCtx.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = 200
+
+  const lp = offlineCtx.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 8000
+
+  const presence = offlineCtx.createBiquadFilter()
+  presence.type = 'peaking'
+  presence.frequency.value = 3500
+  presence.gain.value = 5
+  presence.Q.value = 1.5
+
+  const deesser = offlineCtx.createBiquadFilter()
+  deesser.type = 'peaking'
+  deesser.frequency.value = 7000
+  deesser.gain.value = -3
+  deesser.Q.value = 2
+
+  const comp = offlineCtx.createDynamicsCompressor()
+  comp.threshold.value = -14
+  comp.ratio.value = 4
+  comp.attack.value = 0.003
+  comp.release.value = 0.15
+
+  const limiter = offlineCtx.createDynamicsCompressor()
+  limiter.threshold.value = -1
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.05
+
+  source.connect(hp)
+  hp.connect(lp)
+  lp.connect(presence)
+  presence.connect(deesser)
+  deesser.connect(comp)
+  comp.connect(limiter)
+  limiter.connect(offlineCtx.destination)
+  source.start()
+  return offlineCtx.startRendering()
+}
+
+// ─── EXPORT PRINCIPAL ────────────────────────────────────────────────────────
+export async function applyVoiceEffect(
+  audioBuffer: AudioBuffer,
+  effectId: string
+): Promise<AudioBuffer> {
+  switch (effectId) {
+    case 'normal': return audioBuffer
+
+    // ─── Baseline simple ──────────────────────────────────────────────────
+    case 'deep': {
+      const p = await applySoundTouch(audioBuffer, -6, -0.4)
+      return applyBaselineChain(p)
+    }
+    case 'chipmunk': {
+      const p = await applySoundTouch(audioBuffer, 10, 0.6)
+      return applyBaselineChain(p)
+    }
+    case 'minion': {
+      const p = await applySoundTouch(audioBuffer, 8, 0.5)
+      return applyBaselineChain(p)
+    }
+    case 'helium': {
+      const p = await applySoundTouch(audioBuffer, 14, 0.8)
+      return applyBaselineChain(p)
+    }
+    case 'goblin': {
+      const p = await applySoundTouch(audioBuffer, 5, 0.4)
+      return applyBaselineChain(p)
+    }
+    case 'orc': {
+      const p = await applySoundTouch(audioBuffer, -8, -0.5)
+      return applyBaselineChain(p)
+    }
+    case 'giant': {
+      const p = await applySoundTouch(audioBuffer, -10, -0.6)
+      const reverbed = await applyReverb(p, 1.0, 0.7, 0.2)
+      return applyBaselineChain(reverbed)
+    }
+    case 'vampire': {
+      const p = await applySoundTouch(audioBuffer, -5, -0.3)
+      const reverbed = await applyReverb(p, 1.2, 0.8, 0.25)
+      return applyBaselineChain(reverbed)
+    }
+    case 'elf': {
+      const p = await applySoundTouch(audioBuffer, 6, 0.35)
+      const reverbed = await applyReverb(p, 0.5, 0.4, 0.15)
+      return applyBaselineChain(reverbed)
+    }
+
+    // ─── Effets pro ───────────────────────────────────────────────────────
+    case 'robot': return applyRobotEffect(audioBuffer)
+    case 'cyborg': {
+      const p = await applySoundTouch(audioBuffer, -2, -0.1)
+      return applyRobotEffect(p)
+    }
+    case 'android': {
+      const p = await applySoundTouch(audioBuffer, 1, 0.1)
+      return applyRobotEffect(p)
+    }
+    case 'terminator': {
+      const p = await applySoundTouch(audioBuffer, -8, -0.4)
+      return applyRobotEffect(p)
+    }
+    case 'jarvis': return applyJarvisEffect(audioBuffer)
+    case 'demon': return applyDemonEffect(audioBuffer)
+    case 'dragon': return applyDragonEffect(audioBuffer)
+    case 'ghost': return applyGhostEffect(audioBuffer)
+    case 'angel': return applyAngelEffect(audioBuffer)
+    case 'alien': return applyAlienEffect(audioBuffer)
+    case 'drunk': return applyDrunkEffect(audioBuffer)
+    case '8bit': return apply8BitEffect(audioBuffer)
+    case 'glitch': return applyGlitchEffect(audioBuffer)
+    case 'whisper': return applyWhisperEffect(audioBuffer)
+    case 'megaphone': return applyMegaphoneEffect(audioBuffer)
+    case 'underwater': return applyUnderwaterEffect(audioBuffer)
+    case 'tremolo': return applyTremoloEffect(audioBuffer)
+    case 'vibrato': return applyVibratoEffect(audioBuffer)
+    case 'flanger': return applyFlangerEffect(audioBuffer)
+
+    // ─── Radio & devices ─────────────────────────────────────────────────
+    case 'radio': return applyRadioEffect(audioBuffer, 500, 3500, true)
+    case 'walkie': return applyRadioEffect(audioBuffer, 400, 2800, true)
+    case 'telephone': return applyRadioEffect(audioBuffer, 350, 3800, false)
+    case 'intercom': return applyRadioEffect(audioBuffer, 300, 4200, false)
+    case 'buzz': {
+      const offlineCtx = new OfflineAudioContext(
+        audioBuffer.numberOfChannels, audioBuffer.length, audioBuffer.sampleRate
+      )
+      const src = offlineCtx.createBufferSource()
+      src.buffer = audioBuffer
+      const ws = offlineCtx.createWaveShaper()
+      const curve = new Float32Array(512)
+      for (let i = 0; i < 512; i++) {
+        const x = (i * 2) / 512 - 1
+        curve[i] = Math.tanh(x * 18)
+      }
+      ws.curve = curve
+      ws.oversample = '4x'
+      const comp = offlineCtx.createDynamicsCompressor()
+      comp.threshold.value = -8
+      comp.ratio.value = 10
+      comp.attack.value = 0.001
+      comp.release.value = 0.05
+      const limiter = offlineCtx.createDynamicsCompressor()
+      limiter.threshold.value = -1
+      limiter.ratio.value = 20
+      limiter.attack.value = 0.001
+      limiter.release.value = 0.05
+      src.connect(ws)
+      ws.connect(comp)
+      comp.connect(limiter)
+      limiter.connect(offlineCtx.destination)
+      src.start()
+      return offlineCtx.startRendering()
+    }
+    case 'synthwave': {
+      const reverbed = await applyReverb(audioBuffer, 0.6, 0.5, 0.35)
+      return applyRadioEffect(reverbed, 150, 9000, false)
+    }
+
+    // ─── Ambiances pro ────────────────────────────────────────────────────
+    case 'echo': return applyReverb(audioBuffer, 0.6, 0.5, 0.5)
+    case 'cave': return applyCaveEffect(audioBuffer)
+    case 'stadium': return applyStadiumEffect(audioBuffer)
+    case 'church': return applyReverb(audioBuffer, 3.0, 0.85, 0.7, 0.02)
+    case 'tunnel': return applyReverb(audioBuffer, 1.4, 0.78, 0.6, 0.01)
+    case 'space': return applySpaceEffect(audioBuffer)
+    case 'forest': return applyReverb(audioBuffer, 0.5, 0.35, 0.3)
+    case 'reverse_echo': return applyReverb(audioBuffer, 1.0, 0.65, 0.55)
+
+    // ─── Pitch ────────────────────────────────────────────────────────────
+    case 'pitch_up1': return applySoundTouch(audioBuffer, 3, 0.1)
+    case 'pitch_up2': return applySoundTouch(audioBuffer, 6, 0.2)
+    case 'pitch_down1': return applySoundTouch(audioBuffer, -3, -0.1)
+    case 'pitch_down2': return applySoundTouch(audioBuffer, -6, -0.2)
+    case 'speed_up': return applyPitchShiftBasic(audioBuffer, 1.4)
+    case 'slow_down': return applyPitchShiftBasic(audioBuffer, 0.7)
+
+    default: return audioBuffer
+  }
 }
