@@ -28,6 +28,12 @@ export class TranslationPipeline {
   private sessionId = 0
   private isRunning = false
 
+  // ─── Pipeline parallèle ───────────────────────────────────────────────────
+  private interimText = ''
+  private preTranslateCache = new Map<string, string>()
+  private preTranslateTimer: ReturnType<typeof setTimeout> | null = null
+  private lastFinalText = ''
+
   constructor() {
     this.stt = new DeepgramSTT()
   }
@@ -39,6 +45,9 @@ export class TranslationPipeline {
     const currentSessionId = this.sessionId
     this.config = config
     this.isRunning = true
+    this.interimText = ''
+    this.preTranslateCache.clear()
+    this.lastFinalText = ''
 
     try {
       await this.stt.init()
@@ -51,8 +60,13 @@ export class TranslationPipeline {
         onTranscript: (text, isFinal) => {
           if (!this.isSessionActive(currentSessionId)) return
           config.onTranscript(text, isFinal)
-          if (isFinal && text.trim()) {
-            this.processFinalTranscript(text, config, currentSessionId)
+
+          if (!isFinal) {
+            // ─── INTERIM : pré-traduction en parallèle ───────────────────────
+            this.handleInterim(text, config, currentSessionId)
+          } else if (text.trim()) {
+            // ─── FINAL : utilise cache si dispo ──────────────────────────────
+            this.handleFinal(text, config, currentSessionId)
           }
         },
         onError: (error) => {
@@ -68,50 +82,109 @@ export class TranslationPipeline {
     }
   }
 
-  private isSessionActive(sessionId: number): boolean {
-    return this.isRunning && this.sessionId === sessionId
+  // ─── Pré-traduction sur interim (non bloquant) ────────────────────────────
+  private handleInterim(
+    text: string,
+    config: PipelineConfig,
+    sessionId: number
+  ) {
+    this.interimText = text
+
+    if (this.preTranslateTimer) clearTimeout(this.preTranslateTimer)
+
+    this.preTranslateTimer = setTimeout(async () => {
+      if (!this.isSessionActive(sessionId)) return
+      if (!text.trim() || text.length < 5) return
+      if (this.preTranslateCache.has(text)) return
+
+      try {
+        const translated = await translateText(text, config.sourceLang, config.targetLang)
+        if (!this.isSessionActive(sessionId)) return
+        this.preTranslateCache.set(text, translated)
+        console.log('⚡ Pré-traduction cachée:', text, '→', translated)
+      } catch {
+        // Silencieux — le final refera la traduction
+      }
+    }, 400)
   }
 
-  private async processFinalTranscript(
+  // ─── Final : utilise cache pré-traduit si disponible ─────────────────────
+  private async handleFinal(
     text: string,
     config: PipelineConfig,
     sessionId: number
   ) {
     if (!this.isSessionActive(sessionId)) return
+    if (text === this.lastFinalText) return
+    this.lastFinalText = text
+
+    if (this.preTranslateTimer) {
+      clearTimeout(this.preTranslateTimer)
+      this.preTranslateTimer = null
+    }
 
     try {
       config.onStateChange('processing')
 
-      const translated = await translateText(text, config.sourceLang, config.targetLang)
+      let translated: string
+
+      // ─── Check cache pré-traduction ───────────────────────────────────────
+      if (this.preTranslateCache.has(text)) {
+        translated = this.preTranslateCache.get(text)!
+        console.log('✅ Cache hit:', text, '→', translated)
+      } else {
+        console.log('🔄 Cache miss — traduction normale')
+        translated = await translateText(text, config.sourceLang, config.targetLang)
+      }
 
       if (!this.isSessionActive(sessionId)) return
+
+      // Nettoyer cache — garder 20 max
+      if (this.preTranslateCache.size > 20) {
+        const firstKey = this.preTranslateCache.keys().next().value
+        if (firstKey) this.preTranslateCache.delete(firstKey)
+      }
 
       config.onTranslated(translated)
       config.onStateChange('listening')
 
-      // Jouer sur le virtual device si configuré, sinon sur le casque
       const outputDevice = config.virtualDeviceId || config.headsetDeviceId
-
       speakTranslation(
         translated,
         outputDevice,
         config.targetLang,
         config.voiceEffect || 'normal'
-      ).catch((err) => console.error('Erreur TTS:', err))
+      ).catch(err => console.error('Erreur TTS:', err))
 
     } catch (err) {
-      console.error('Erreur traduction:', err)
+      console.error('Erreur traduction finale:', err)
       if (!this.isSessionActive(sessionId)) return
       config.onStateChange('listening')
     }
   }
 
+  private isSessionActive(sessionId: number): boolean {
+    return this.isRunning && this.sessionId === sessionId
+  }
+
   stop() {
     this.isRunning = false
     this.sessionId += 1
+
+    if (this.preTranslateTimer) {
+      clearTimeout(this.preTranslateTimer)
+      this.preTranslateTimer = null
+    }
+
+    this.preTranslateCache.clear()
+    this.interimText = ''
+    this.lastFinalText = ''
+
     this.stt.stop()
     clearTTSQueue()
     if (this.config) this.config.onStateChange('inactive')
     this.config = null
+
+    console.log('🛑 Pipeline arrêté proprement')
   }
 }
