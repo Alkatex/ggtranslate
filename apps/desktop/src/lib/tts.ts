@@ -13,7 +13,58 @@ const VOICE_BY_LANG: Record<string, string> = {
 }
 
 const DEFAULT_VOICE = 'aura-2-thalia-en'
+const TARGET_LUFS = -14
+const MAX_QUEUE_SIZE = 3 // max phrases en attente avant prune
 
+// ─── Loudness normalization -14 LUFS ─────────────────────────────────────────
+function normalizeLoudness(buffer: AudioBuffer): AudioBuffer {
+  const offlineCtx = new OfflineAudioContext(
+    buffer.numberOfChannels,
+    buffer.length,
+    buffer.sampleRate
+  )
+
+  // Calcul RMS
+  let sumSquares = 0
+  let totalSamples = 0
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch)
+    for (let i = 0; i < data.length; i++) {
+      sumSquares += data[i] * data[i]
+      totalSamples++
+    }
+  }
+  const rms = Math.sqrt(sumSquares / totalSamples)
+  if (rms === 0) return buffer
+
+  // RMS → LUFS approximatif
+  const currentLUFS = 20 * Math.log10(rms) - 0.691
+  const gainDB = TARGET_LUFS - currentLUFS
+  const gainLinear = Math.pow(10, gainDB / 20)
+
+  // Limiter à 6dB max gain pour éviter clipping
+  const safeGain = Math.min(gainLinear, 2.0)
+
+  // Applique gain + limiter
+  const outputBuffer = offlineCtx.createBuffer(
+    buffer.numberOfChannels,
+    buffer.length,
+    buffer.sampleRate
+  )
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const inputData = buffer.getChannelData(ch)
+    const outputData = outputBuffer.getChannelData(ch)
+    for (let i = 0; i < inputData.length; i++) {
+      // Gain + hard limiter -1/+1
+      outputData[i] = Math.max(-1, Math.min(1, inputData[i] * safeGain))
+    }
+  }
+
+  console.log(`🔊 LUFS: ${currentLUFS.toFixed(1)} → ${TARGET_LUFS} | gain: ${(gainDB).toFixed(1)}dB`)
+  return outputBuffer
+}
+
+// ─── TTS Queue intelligente ───────────────────────────────────────────────────
 class TTSQueue {
   private queue: Array<{
     text: string
@@ -21,6 +72,7 @@ class TTSQueue {
     voice: string
     targetLang: string
     effectId: string
+    addedAt: number
   }> = []
   private isPlaying = false
   private name: string
@@ -36,7 +88,22 @@ class TTSQueue {
     targetLang: string,
     effectId: string = 'normal'
   ) {
-    this.queue.push({ text, headsetDeviceId, voice, targetLang, effectId })
+    // ─── Prune si queue trop grande ───────────────────────────────────────────
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      console.warn(`⚠️ TTS Queue [${this.name}] pleine (${this.queue.length}) — prune`)
+      // Garde seulement la dernière phrase — skip les obsolètes
+      this.queue = [this.queue[this.queue.length - 1]]
+    }
+
+    // ─── Priorité phrases courtes ─────────────────────────────────────────────
+    const item = { text, headsetDeviceId, voice, targetLang, effectId, addedAt: Date.now() }
+    if (text.length < 20 && this.queue.length > 0) {
+      // Insérer en tête si phrase courte
+      this.queue.unshift(item)
+    } else {
+      this.queue.push(item)
+    }
+
     if (!this.isPlaying) await this.processQueue()
   }
 
@@ -47,6 +114,15 @@ class TTSQueue {
     }
     this.isPlaying = true
     const item = this.queue.shift()!
+
+    // ─── Skip si phrase obsolète (>5s en queue) ───────────────────────────────
+    const age = Date.now() - item.addedAt
+    if (age > 5000) {
+      console.warn(`⏭️ TTS skip obsolète (${age}ms): "${item.text.substring(0, 30)}..."`)
+      await this.processQueue()
+      return
+    }
+
     try {
       await playAudio(item.text, item.headsetDeviceId, item.voice, item.targetLang, item.effectId)
     } catch (err) {
@@ -73,7 +149,7 @@ function getVoiceForLanguage(targetLang: string): string {
   return VOICE_BY_LANG[normalizedLang] || DEFAULT_VOICE
 }
 
-// Resample audio vers le sample rate cible
+// ─── Resample ─────────────────────────────────────────────────────────────────
 async function resampleBuffer(
   buffer: AudioBuffer,
   targetSampleRate: number
@@ -91,7 +167,7 @@ async function resampleBuffer(
   return offlineCtx.startRendering()
 }
 
-// Ajouter silence à la fin pour éviter coupure
+// ─── Silence padding ──────────────────────────────────────────────────────────
 async function addSilencePadding(
   buffer: AudioBuffer,
   paddingSeconds: number = 0.5
@@ -109,6 +185,7 @@ async function addSilencePadding(
   return offlineCtx.startRendering()
 }
 
+// ─── Play audio ───────────────────────────────────────────────────────────────
 async function playAudio(
   text: string,
   headsetDeviceId: string | null,
@@ -127,7 +204,7 @@ async function playAudio(
   const audioBlob = await res.blob()
   const arrayBuffer = await audioBlob.arrayBuffer()
 
-  // Sans effet — HTMLAudioElement avec setSinkId
+  // ─── Sans effet — HTMLAudioElement ────────────────────────────────────────
   if (!effectId || effectId === 'normal') {
     const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
     const url = URL.createObjectURL(blob)
@@ -143,20 +220,14 @@ async function playAudio(
 
     return new Promise((resolve) => {
       audio.addEventListener('ended', () => {
-        setTimeout(() => {
-          URL.revokeObjectURL(url)
-          resolve()
-        }, 400)
+        setTimeout(() => { URL.revokeObjectURL(url); resolve() }, 400)
       })
-      audio.addEventListener('error', () => {
-        URL.revokeObjectURL(url)
-        resolve()
-      })
+      audio.addEventListener('error', () => { URL.revokeObjectURL(url); resolve() })
       audio.play().catch(() => resolve())
     })
   }
 
-  // Avec effets DSP — AudioContext 44100Hz pour VB-Audio
+  // ─── Avec effets DSP — AudioContext 44100Hz ───────────────────────────────
   const audioCtx = new AudioContext({ sampleRate: 44100 })
 
   if (headsetDeviceId && 'setSinkId' in audioCtx) {
@@ -169,15 +240,18 @@ async function playAudio(
 
   let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
 
-  // Resample vers 44100Hz si nécessaire
+  // Resample vers 44100Hz
   if (audioBuffer.sampleRate !== 44100) {
     audioBuffer = await resampleBuffer(audioBuffer, 44100)
   }
 
-  // Appliquer l'effet DSP
+  // ─── Loudness normalization -14 LUFS ─────────────────────────────────────
+  audioBuffer = normalizeLoudness(audioBuffer)
+
+  // ─── Effets DSP ───────────────────────────────────────────────────────────
   audioBuffer = await applyVoiceEffect(audioBuffer, effectId)
 
-  // Ajouter silence à la fin — évite la coupure
+  // ─── Silence padding ──────────────────────────────────────────────────────
   audioBuffer = await addSilencePadding(audioBuffer, 0.5)
 
   const source = audioCtx.createBufferSource()
@@ -186,10 +260,7 @@ async function playAudio(
 
   return new Promise((resolve) => {
     source.addEventListener('ended', () => {
-      setTimeout(() => {
-        audioCtx.close()
-        resolve()
-      }, 400)
+      setTimeout(() => { audioCtx.close(); resolve() }, 400)
     })
     source.start()
   })
