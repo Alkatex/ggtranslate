@@ -1,78 +1,81 @@
 interface VADOptions {
-    speechThreshold?: number
-    silenceThreshold?: number
     hysteresisFrames?: number
+    hangoverFrames?: number
   }
   
   export class VAD {
     private isSpeaking = false
     private speechFrameCount = 0
     private silenceFrameCount = 0
-    private speechThreshold: number
-    private silenceThreshold: number
     private hysteresisFrames: number
     private isReady = false
   
-    // Historique RMS pour normalisation adaptative
+    // ─── Historique RMS pour auto-calibration ────────────────────────────────
     private rmsHistory: number[] = []
-    private readonly RMS_HISTORY_SIZE = 30
+    private readonly RMS_HISTORY_SIZE = 50
+  
+    // ─── Hangover — évite coupures entre mots ────────────────────────────────
+    private hangoverFrames: number
+    private hangover = 0
   
     constructor(options: VADOptions = {}) {
-      this.speechThreshold = options.speechThreshold ?? 0.015
-      this.silenceThreshold = options.silenceThreshold ?? 0.008
-      this.hysteresisFrames = options.hysteresisFrames ?? 8
+      this.hysteresisFrames = options.hysteresisFrames ?? 3
+      this.hangoverFrames = options.hangoverFrames ?? 5
     }
   
     async init(): Promise<void> {
       this.isReady = true
-      console.log('✅ VAD energy-based initialisé')
+      console.log('✅ VAD auto-calibré initialisé')
     }
   
     processFrame(frame: Float32Array): {
       isSpeech: boolean
-      probability: number
-      denoisedFrame: Float32Array
+      rms: number
     } {
       if (!this.isReady) {
-        return { isSpeech: true, probability: 1.0, denoisedFrame: frame }
+        return { isSpeech: true, rms: 0 }
       }
   
-      // ─── Calcul RMS (Root Mean Square) ────────────────────────────────────────
+      // ─── Calcul RMS ──────────────────────────────────────────────────────────
       let sum = 0
       for (let i = 0; i < frame.length; i++) {
         sum += frame[i] * frame[i]
       }
       const rms = Math.sqrt(sum / frame.length)
   
-      // ─── Historique adaptatif ──────────────────────────────────────────────────
+      // ─── Historique adaptatif ─────────────────────────────────────────────────
       this.rmsHistory.push(rms)
       if (this.rmsHistory.length > this.RMS_HISTORY_SIZE) {
         this.rmsHistory.shift()
       }
   
-      // Probabilité de parole basée sur RMS
-      const probability = Math.min(1.0, rms / (this.speechThreshold * 2))
+      // ─── Seuils auto-calibrés selon le bruit ambiant ─────────────────────────
+      const avgRms = this.rmsHistory.reduce((a, b) => a + b, 0) / this.rmsHistory.length
+      const speechThreshold = Math.max(avgRms * 0.5, 0.003)
+      const silenceThreshold = avgRms * 0.5
   
-      // ─── Hysteresis ────────────────────────────────────────────────────────────
-      if (rms > this.speechThreshold) {
+      // ─── Détection avec hangover ──────────────────────────────────────────────
+      if (rms > speechThreshold) {
         this.speechFrameCount++
         this.silenceFrameCount = 0
         if (this.speechFrameCount >= this.hysteresisFrames) {
           this.isSpeaking = true
+          this.hangover = this.hangoverFrames
         }
-      } else if (rms < this.silenceThreshold) {
-        this.silenceFrameCount++
+      } else {
         this.speechFrameCount = 0
-        if (this.silenceFrameCount >= this.hysteresisFrames) {
-          this.isSpeaking = false
+        if (this.hangover > 0) {
+          this.hangover--
+          this.isSpeaking = true
+        } else if (rms < silenceThreshold) {
+          this.silenceFrameCount++
+          if (this.silenceFrameCount >= this.hysteresisFrames) {
+            this.isSpeaking = false
+          }
         }
       }
   
-      return {
-        isSpeech: this.isSpeaking,
-        probability,
-        denoisedFrame: frame,
-      }
+      return { isSpeech: this.isSpeaking, rms }
     }
   
     get speaking(): boolean {
@@ -82,6 +85,7 @@ interface VADOptions {
     destroy() {
       this.isReady = false
       this.rmsHistory = []
+      this.hangover = 0
       console.log('🛑 VAD détruit')
     }
   }

@@ -24,7 +24,7 @@ export class DeepgramSTT {
     try {
       window.electron.stt.removeListeners()
 
-      // ─── 1. Stream micro ─────────────────────────────────────────────────────
+      // ─── 1. Stream micro ─────────────────────────────────────────────────
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: deviceId ? { exact: deviceId } : undefined,
@@ -43,7 +43,7 @@ export class DeepgramSTT {
       const track = this.stream.getAudioTracks()[0]
       console.log('🎤 Micro:', track.label)
 
-      // ─── 2. Démarre STT main process ─────────────────────────────────────────
+      // ─── 2. Démarre STT main process ─────────────────────────────────────
       await window.electron.stt.start(options.language)
 
       if (!this.isRunning) {
@@ -51,7 +51,7 @@ export class DeepgramSTT {
         return
       }
 
-      // ─── 3. Listeners STT ────────────────────────────────────────────────────
+      // ─── 3. Listeners STT ────────────────────────────────────────────────
       window.electron.stt.onTranscript((data) => {
         if (!this.isRunning) return
         options.onTranscript(data.text, data.isFinal)
@@ -67,14 +67,14 @@ export class DeepgramSTT {
         options.onError(error)
       })
 
-      // ─── 4. AudioContext 16kHz ────────────────────────────────────────────────
+      // ─── 4. AudioContext 16kHz ────────────────────────────────────────────
       this.audioCtx = new AudioContext({ sampleRate: 16000 })
 
       if (this.audioCtx.state === 'suspended') {
         await this.audioCtx.resume()
       }
 
-      // ─── 5. AudioWorklet ─────────────────────────────────────────────────────
+      // ─── 5. AudioWorklet ─────────────────────────────────────────────────
       await this.audioCtx.audioWorklet.addModule(
         new URL('../worklets/audio-processor.worklet.js', import.meta.url)
       )
@@ -84,7 +84,7 @@ export class DeepgramSTT {
         processorOptions: { sampleRate: 16000 },
       })
 
-      // ─── 6. Reçoit chunks batchés ────────────────────────────────────────────
+      // ─── 6. Reçoit chunks batchés → Deepgram directement ─────────────────
       this.workletNode.port.onmessage = (event) => {
         if (!this.isRunning) return
         if (event.data.type === 'audio') {
@@ -99,7 +99,7 @@ export class DeepgramSTT {
 
       source.connect(this.workletNode)
 
-      // ─── 7. Heartbeat ─────────────────────────────────────────────────────────
+      // ─── 7. Heartbeat ─────────────────────────────────────────────────────
       this.lastChunkTime = Date.now()
       this.heartbeatInterval = setInterval(() => {
         if (!this.isRunning) return
