@@ -23,6 +23,9 @@ importers:
       '@deepgram/sdk':
         specifier: 2.4.0
         version: 2.4.0
+      '@jitsi/rnnoise-wasm':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@supabase/supabase-js':
         specifier: ^2.103.0
         version: 2.103.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -798,6 +801,9 @@ packages:
 
   '@jimp/utils@0.16.13':
     resolution: {integrity: sha512-VyCpkZzFTHXtKgVO35iKN0sYR10psGpV6SkcSeV4oF7eSYlR8Bl6aQLCzVeFjvESF7mxTmIiI3/XrMobVrtxDA==}
+
+  '@jitsi/rnnoise-wasm@0.2.1':
+    resolution: {integrity: sha512-iEj77www43pS2Yq+cfLZb+hFuI7L5ccisBzzPMcOjjLsG4/LAlkD1CY58/8gc84nHdLBGmD/OPIWGnvYnXvB0A==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -4479,6 +4485,8 @@ snapshots:
     dependencies:
       '@babel/runtime': 7.29.2
       regenerator-runtime: 0.13.11
+
+  '@jitsi/rnnoise-wasm@0.2.1': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
