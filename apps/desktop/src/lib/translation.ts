@@ -5,6 +5,7 @@ const DB_VERSION = 1
 const STORE_NAME = 'translations'
 const LRU_MAX = 200
 const DB_MAX_AGE_DAYS = 30
+const DB_TIMEOUT_MS = 1000 // timeout réduit à 1s
 
 // ─── LRU Cache en mémoire ─────────────────────────────────────────────────────
 class LRUCache {
@@ -17,7 +18,6 @@ class LRUCache {
 
   get(key: string): string | undefined {
     if (!this.map.has(key)) return undefined
-    // Déplacer en fin (most recently used)
     const val = this.map.get(key)!
     this.map.delete(key)
     this.map.set(key, val)
@@ -27,7 +27,6 @@ class LRUCache {
   set(key: string, value: string) {
     if (this.map.has(key)) this.map.delete(key)
     this.map.set(key, value)
-    // Supprimer le plus ancien si dépassé
     if (this.map.size > this.max) {
       const oldestKey = this.map.keys().next().value
       if (oldestKey) this.map.delete(oldestKey)
@@ -45,13 +44,20 @@ class LRUCache {
 
 const lruCache = new LRUCache(LRU_MAX)
 
-// ─── IndexedDB ────────────────────────────────────────────────────────────────
+// ─── IndexedDB — avec timeout et fallback silencieux ─────────────────────────
 let db: IDBDatabase | null = null
+let dbFailed = false // si DB a échoué on arrête d'essayer
 
 async function openDB(): Promise<IDBDatabase> {
   if (db) return db
+  if (dbFailed) throw new Error('IndexedDB non disponible')
 
   return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      dbFailed = true
+      reject(new Error('IndexedDB timeout'))
+    }, DB_TIMEOUT_MS)
+
     const request = indexedDB.open(DB_NAME, DB_VERSION)
 
     request.onupgradeneeded = (event) => {
@@ -63,11 +69,16 @@ async function openDB(): Promise<IDBDatabase> {
     }
 
     request.onsuccess = (event) => {
+      clearTimeout(timeout)
       db = (event.target as IDBOpenDBRequest).result
       resolve(db)
     }
 
-    request.onerror = () => reject(request.error)
+    request.onerror = () => {
+      clearTimeout(timeout)
+      dbFailed = true
+      reject(request.error)
+    }
   })
 }
 
@@ -75,13 +86,14 @@ async function getFromDB(key: string): Promise<string | null> {
   try {
     const database = await openDB()
     return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 500)
       const tx = database.transaction(STORE_NAME, 'readonly')
       const store = tx.objectStore(STORE_NAME)
       const request = store.get(key)
       request.onsuccess = () => {
+        clearTimeout(timeout)
         const result = request.result
         if (!result) { resolve(null); return }
-        // Vérifier expiration
         const ageMs = Date.now() - result.timestamp
         if (ageMs > DB_MAX_AGE_DAYS * 24 * 60 * 60 * 1000) {
           resolve(null)
@@ -89,7 +101,7 @@ async function getFromDB(key: string): Promise<string | null> {
         }
         resolve(result.value)
       }
-      request.onerror = () => resolve(null)
+      request.onerror = () => { clearTimeout(timeout); resolve(null) }
     })
   } catch {
     return null
@@ -121,10 +133,7 @@ async function cleanOldEntries(): Promise<void> {
       const request = index.openCursor(range)
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result
-        if (cursor) {
-          cursor.delete()
-          cursor.continue()
-        }
+        if (cursor) { cursor.delete(); cursor.continue() }
       }
       tx.oncomplete = () => resolve()
       tx.onerror = () => resolve()
@@ -132,10 +141,9 @@ async function cleanOldEntries(): Promise<void> {
   } catch {}
 }
 
-// Nettoyage au démarrage
-cleanOldEntries().catch(() => {})
+// Nettoyage au démarrage — non bloquant
+setTimeout(() => cleanOldEntries().catch(() => {}), 5000)
 
-// ─── Normalise la clé de cache ────────────────────────────────────────────────
 function buildCacheKey(text: string, sourceLang: string, targetLang: string): string {
   return `${sourceLang}:${targetLang}:${text.trim().toLowerCase()}`
 }
@@ -157,46 +165,42 @@ export async function translateText(
     return lruCache.get(key)!
   }
 
-  // ─── 2. IndexedDB (persisté entre sessions) ───────────────────────────────
-  const cached = await getFromDB(key)
-  if (cached) {
-    console.log('💾 DB hit:', text.slice(0, 30))
-    lruCache.set(key, cached) // Remonter dans LRU
-    return cached
+  // ─── 2. IndexedDB — non bloquant, timeout court ───────────────────────────
+  if (!dbFailed) {
+    const cached = await getFromDB(key)
+    if (cached) {
+      console.log('💾 DB hit:', text.slice(0, 30))
+      lruCache.set(key, cached)
+      return cached
+    }
   }
 
   // ─── 3. API DeepL ─────────────────────────────────────────────────────────
-  try {
-    const res = await fetch(`${API_URL}/ai/translate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, sourceLang, targetLang }),
-    })
+  const res = await fetch(`${API_URL}/ai/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, sourceLang, targetLang }),
+  })
 
-    if (!res.ok) throw new Error('Erreur traduction')
+  if (!res.ok) throw new Error('Erreur traduction')
 
-    const data = await res.json() as any
-    const translated = data.translated || data.translatedText
+  const data = await res.json() as any
+  const translated = data.translated || data.translatedText
 
-    if (!translated) throw new Error('Réponse traduction invalide')
+  if (!translated) throw new Error('Réponse traduction invalide')
 
-    // Sauvegarder dans LRU + IndexedDB
-    lruCache.set(key, translated)
-    saveToDB(key, translated).catch(() => {}) // Async non bloquant
+  lruCache.set(key, translated)
+  saveToDB(key, translated).catch(() => {})
 
-    console.log(`✅ Traduit: "${text.slice(0, 20)}" → "${translated.slice(0, 20)}"`)
-    return translated
-
-  } catch (err) {
-    console.error('❌ Erreur DeepL:', err)
-    throw err
-  }
+  console.log(`✅ Traduit: "${text.slice(0, 20)}" → "${translated.slice(0, 20)}"`)
+  return translated
 }
 
-// ─── Utilitaires ──────────────────────────────────────────────────────────────
 export function clearTranslationCache() {
   lruCache['map'].clear()
-  console.log('🧹 LRU cache vidé')
+  db = null
+  dbFailed = false
+  console.log('🧹 Cache vidé')
 }
 
 export async function getCacheStats(): Promise<{ lruSize: number; dbSize: number }> {
@@ -206,9 +210,7 @@ export async function getCacheStats(): Promise<{ lruSize: number; dbSize: number
       const tx = database.transaction(STORE_NAME, 'readonly')
       const store = tx.objectStore(STORE_NAME)
       const countReq = store.count()
-      countReq.onsuccess = () => {
-        resolve({ lruSize: lruCache.size, dbSize: countReq.result })
-      }
+      countReq.onsuccess = () => resolve({ lruSize: lruCache.size, dbSize: countReq.result })
       countReq.onerror = () => resolve({ lruSize: lruCache.size, dbSize: 0 })
     })
   } catch {

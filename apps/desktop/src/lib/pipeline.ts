@@ -1,6 +1,7 @@
 import { DeepgramSTT } from './deepgram'
 import { translateText } from './translation'
 import { speakTranslation, clearTTSQueue } from './tts'
+import { errorBus } from './errorBus'
 
 export type PipelineState =
   | 'inactive'
@@ -62,21 +63,33 @@ export class TranslationPipeline {
           config.onTranscript(text, isFinal)
 
           if (!isFinal) {
-            // ─── INTERIM : pré-traduction en parallèle ───────────────────────
             this.handleInterim(text, config, currentSessionId)
           } else if (text.trim()) {
-            // ─── FINAL : utilise cache si dispo ──────────────────────────────
             this.handleFinal(text, config, currentSessionId)
           }
         },
         onError: (error) => {
           if (!this.isSessionActive(currentSessionId)) return
+          errorBus.emit({
+            type: 'STT_ERROR',
+            severity: 'error',
+            message: error,
+            retryable: true,
+            context: { sourceLang: config.sourceLang },
+          })
           config.onStateChange('error')
           config.onError(error)
         },
       })
-    } catch (err) {
+    } catch (err: any) {
       if (!this.isSessionActive(currentSessionId)) return
+      errorBus.emit({
+        type: 'PIPELINE_ERROR',
+        severity: 'critical',
+        message: 'Impossible de démarrer le pipeline',
+        retryable: true,
+        context: { error: err?.message },
+      })
       config.onStateChange('error')
       config.onError('Impossible de démarrer le pipeline')
     }
@@ -128,7 +141,6 @@ export class TranslationPipeline {
 
       let translated: string
 
-      // ─── Check cache pré-traduction ───────────────────────────────────────
       if (this.preTranslateCache.has(text)) {
         translated = this.preTranslateCache.get(text)!
         console.log('✅ Cache hit:', text, '→', translated)
@@ -139,7 +151,6 @@ export class TranslationPipeline {
 
       if (!this.isSessionActive(sessionId)) return
 
-      // Nettoyer cache — garder 20 max
       if (this.preTranslateCache.size > 20) {
         const firstKey = this.preTranslateCache.keys().next().value
         if (firstKey) this.preTranslateCache.delete(firstKey)
@@ -154,9 +165,25 @@ export class TranslationPipeline {
         outputDevice,
         config.targetLang,
         config.voiceEffect || 'normal'
-      ).catch(err => console.error('Erreur TTS:', err))
+      ).catch(err => {
+        errorBus.emit({
+          type: 'TTS_ERROR',
+          severity: 'warning',
+          message: 'Erreur TTS',
+          retryable: true,
+          context: { error: err?.message },
+        })
+        console.error('Erreur TTS:', err)
+      })
 
-    } catch (err) {
+    } catch (err: any) {
+      errorBus.emit({
+        type: 'TRANSLATION_ERROR',
+        severity: 'error',
+        message: 'Erreur traduction finale',
+        retryable: true,
+        context: { text, error: err?.message },
+      })
       console.error('Erreur traduction finale:', err)
       if (!this.isSessionActive(sessionId)) return
       config.onStateChange('listening')
