@@ -1,4 +1,4 @@
-import { applyVoiceEffect } from './voiceEffects'
+import { applyVoiceEffectWorker } from './dspWorkerClient'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://ggtranslatebackend-production.up.railway.app'
 
@@ -14,17 +14,10 @@ const VOICE_BY_LANG: Record<string, string> = {
 
 const DEFAULT_VOICE = 'aura-2-thalia-en'
 const TARGET_LUFS = -14
-const MAX_QUEUE_SIZE = 3 // max phrases en attente avant prune
+const MAX_QUEUE_SIZE = 3
 
 // ─── Loudness normalization -14 LUFS ─────────────────────────────────────────
 function normalizeLoudness(buffer: AudioBuffer): AudioBuffer {
-  const offlineCtx = new OfflineAudioContext(
-    buffer.numberOfChannels,
-    buffer.length,
-    buffer.sampleRate
-  )
-
-  // Calcul RMS
   let sumSquares = 0
   let totalSamples = 0
   for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
@@ -37,30 +30,24 @@ function normalizeLoudness(buffer: AudioBuffer): AudioBuffer {
   const rms = Math.sqrt(sumSquares / totalSamples)
   if (rms === 0) return buffer
 
-  // RMS → LUFS approximatif
   const currentLUFS = 20 * Math.log10(rms) - 0.691
   const gainDB = TARGET_LUFS - currentLUFS
   const gainLinear = Math.pow(10, gainDB / 20)
-
-  // Limiter à 6dB max gain pour éviter clipping
   const safeGain = Math.min(gainLinear, 2.0)
 
-  // Applique gain + limiter
-  const outputBuffer = offlineCtx.createBuffer(
-    buffer.numberOfChannels,
-    buffer.length,
-    buffer.sampleRate
-  )
+  const outputBuffer = new OfflineAudioContext(
+    buffer.numberOfChannels, buffer.length, buffer.sampleRate
+  ).createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
+
   for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
     const inputData = buffer.getChannelData(ch)
     const outputData = outputBuffer.getChannelData(ch)
     for (let i = 0; i < inputData.length; i++) {
-      // Gain + hard limiter -1/+1
       outputData[i] = Math.max(-1, Math.min(1, inputData[i] * safeGain))
     }
   }
 
-  console.log(`🔊 LUFS: ${currentLUFS.toFixed(1)} → ${TARGET_LUFS} | gain: ${(gainDB).toFixed(1)}dB`)
+  console.log(`🔊 LUFS: ${currentLUFS.toFixed(1)} → ${TARGET_LUFS} | gain: ${gainDB.toFixed(1)}dB`)
   return outputBuffer
 }
 
@@ -88,17 +75,15 @@ class TTSQueue {
     targetLang: string,
     effectId: string = 'normal'
   ) {
-    // ─── Prune si queue trop grande ───────────────────────────────────────────
+    // Prune si queue trop grande
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      console.warn(`⚠️ TTS Queue [${this.name}] pleine (${this.queue.length}) — prune`)
-      // Garde seulement la dernière phrase — skip les obsolètes
+      console.warn(`⚠️ TTS Queue [${this.name}] pleine — prune`)
       this.queue = [this.queue[this.queue.length - 1]]
     }
 
-    // ─── Priorité phrases courtes ─────────────────────────────────────────────
+    // Priorité phrases courtes
     const item = { text, headsetDeviceId, voice, targetLang, effectId, addedAt: Date.now() }
     if (text.length < 20 && this.queue.length > 0) {
-      // Insérer en tête si phrase courte
       this.queue.unshift(item)
     } else {
       this.queue.push(item)
@@ -115,7 +100,7 @@ class TTSQueue {
     this.isPlaying = true
     const item = this.queue.shift()!
 
-    // ─── Skip si phrase obsolète (>5s en queue) ───────────────────────────────
+    // Skip si phrase obsolète > 5s
     const age = Date.now() - item.addedAt
     if (age > 5000) {
       console.warn(`⏭️ TTS skip obsolète (${age}ms): "${item.text.substring(0, 30)}..."`)
@@ -149,7 +134,6 @@ function getVoiceForLanguage(targetLang: string): string {
   return VOICE_BY_LANG[normalizedLang] || DEFAULT_VOICE
 }
 
-// ─── Resample ─────────────────────────────────────────────────────────────────
 async function resampleBuffer(
   buffer: AudioBuffer,
   targetSampleRate: number
@@ -167,7 +151,6 @@ async function resampleBuffer(
   return offlineCtx.startRendering()
 }
 
-// ─── Silence padding ──────────────────────────────────────────────────────────
 async function addSilencePadding(
   buffer: AudioBuffer,
   paddingSeconds: number = 0.5
@@ -185,7 +168,6 @@ async function addSilencePadding(
   return offlineCtx.startRendering()
 }
 
-// ─── Play audio ───────────────────────────────────────────────────────────────
 async function playAudio(
   text: string,
   headsetDeviceId: string | null,
@@ -211,11 +193,7 @@ async function playAudio(
     const audio = new Audio(url)
 
     if (headsetDeviceId && 'setSinkId' in audio) {
-      try {
-        await (audio as any).setSinkId(headsetDeviceId)
-      } catch (err) {
-        console.warn('setSinkId failed:', err)
-      }
+      try { await (audio as any).setSinkId(headsetDeviceId) } catch {}
     }
 
     return new Promise((resolve) => {
@@ -227,31 +205,26 @@ async function playAudio(
     })
   }
 
-  // ─── Avec effets DSP — AudioContext 44100Hz ───────────────────────────────
+  // ─── Avec effets DSP dans Worker ─────────────────────────────────────────
   const audioCtx = new AudioContext({ sampleRate: 44100 })
 
   if (headsetDeviceId && 'setSinkId' in audioCtx) {
-    try {
-      await (audioCtx as any).setSinkId(headsetDeviceId)
-    } catch (err) {
-      console.warn('setSinkId AudioContext failed:', err)
-    }
+    try { await (audioCtx as any).setSinkId(headsetDeviceId) } catch {}
   }
 
   let audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
 
-  // Resample vers 44100Hz
   if (audioBuffer.sampleRate !== 44100) {
     audioBuffer = await resampleBuffer(audioBuffer, 44100)
   }
 
-  // ─── Loudness normalization -14 LUFS ─────────────────────────────────────
+  // Loudness normalization
   audioBuffer = normalizeLoudness(audioBuffer)
 
-  // ─── Effets DSP ───────────────────────────────────────────────────────────
-  audioBuffer = await applyVoiceEffect(audioBuffer, effectId)
+  // DSP dans Web Worker — libère le thread UI
+  audioBuffer = await applyVoiceEffectWorker(audioBuffer, effectId)
 
-  // ─── Silence padding ──────────────────────────────────────────────────────
+  // Silence padding
   audioBuffer = await addSilencePadding(audioBuffer, 0.5)
 
   const source = audioCtx.createBufferSource()
