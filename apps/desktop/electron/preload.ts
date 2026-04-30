@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('electron', {
   overlay: {
     open: () => ipcRenderer.invoke('overlay:open'),
     close: () => ipcRenderer.invoke('overlay:close'),
+    // ─── Envoyer une traduction à l'overlay ──────────────────────────────────
+    sendTranslation: (data: any) => ipcRenderer.send('overlay:translation', data),
     onTranslation: (callback: (data: any) => void) => {
       ipcRenderer.on('overlay:translation', (_event, data) => callback(data))
     },
@@ -148,6 +150,7 @@ declare global {
       overlay: {
         open: () => Promise<void>
         close: () => Promise<void>
+        sendTranslation: (data: any) => void
         onTranslation: (callback: (data: any) => void) => void
         removeListeners: () => void
       }

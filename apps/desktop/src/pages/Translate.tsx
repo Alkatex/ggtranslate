@@ -267,6 +267,14 @@ export function TranslatePage() {
           currentTranscriptRef.current = ''
           setSessionPhrases(prev => prev + 1)
 
+          // ─── Overlay ────────────────────────────────────────────────────────
+          window.electron.overlay.sendTranslation({
+            original: originalText,
+            translated: text,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'my',
+          })
+
           const { user } = useAuthStore.getState()
           if (user) {
             const langInfo = LANGUAGES.find(l => l.code === targetLangRef.current)
@@ -277,7 +285,7 @@ export function TranslatePage() {
             })
           }
 
-          // Envoyer sur Discord
+          // ─── Discord ─────────────────────────────────────────────────────────
           const srcInfo = LANGUAGES.find(l => l.code === sourceLangRef.current)
           const tgtInfo = LANGUAGES.find(l => l.code === targetLangRef.current)
           sendToDiscord({
@@ -333,6 +341,14 @@ export function TranslatePage() {
           currentOtherTranscriptRef.current = ''
           setSessionPhrases(prev => prev + 1)
 
+          // ─── Overlay ────────────────────────────────────────────────────────
+          window.electron.overlay.sendTranslation({
+            original: originalText,
+            translated: text,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'other',
+          })
+
           const { user } = useAuthStore.getState()
           if (user) {
             const langInfo = LANGUAGES.find(l => l.code === sourceLangRef.current)
@@ -343,7 +359,7 @@ export function TranslatePage() {
             })
           }
 
-          // Envoyer sur Discord
+          // ─── Discord ─────────────────────────────────────────────────────────
           const srcInfo = LANGUAGES.find(l => l.code === targetLangRef.current)
           const tgtInfo = LANGUAGES.find(l => l.code === sourceLangRef.current)
           sendToDiscord({
@@ -383,6 +399,14 @@ export function TranslatePage() {
       }])
       setSessionPhrases(prev => prev + 1)
 
+      // ─── Overlay ──────────────────────────────────────────────────────────
+      window.electron.overlay.sendTranslation({
+        original: text,
+        translated,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'my',
+      })
+
       const { user } = useAuthStore.getState()
       if (user) {
         const langInfo = LANGUAGES.find(l => l.code === targetLang)
@@ -393,7 +417,7 @@ export function TranslatePage() {
         })
       }
 
-      // Envoyer sur Discord
+      // ─── Discord ────────────────────────────────────────────────────────────
       const srcInfo = LANGUAGES.find(l => l.code === sourceLang)
       const tgtInfo = LANGUAGES.find(l => l.code === targetLang)
       sendToDiscord({
