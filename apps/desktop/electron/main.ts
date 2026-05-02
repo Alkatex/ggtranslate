@@ -7,7 +7,6 @@ for (let i = 0; i < 6; i++) {
   const envPath = path.join(dir, '.env')
   if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath })
-    console.log('✅ .env trouvé:', envPath)
     break
   }
   dir = path.dirname(dir)
@@ -31,7 +30,6 @@ let selectionWindow: BrowserWindow | null = null
 let gameDetectionInterval: ReturnType<typeof setInterval> | null = null
 let lastDetectedGame: string | null = null
 
-// Processus exacts — comparaison stricte pour éviter les faux positifs
 const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
   'valorant': {
     name: 'Valorant', emoji: '🎯',
@@ -111,9 +109,7 @@ function detectActiveGame(): string | null {
     const output = execSync('powershell -Command "Get-Process | Select-Object -ExpandProperty Name"', {
       stdio: 'pipe', timeout: 3000, encoding: 'utf8',
     })
-    // Comparaison exacte — trim + lowercase + sans extension
     const processes = output.split('\n').map(p => p.trim().toLowerCase().replace(/\.exe$/, ''))
-
     for (const [processName] of Object.entries(SUPPORTED_GAMES)) {
       if (processes.some(p => p === processName.toLowerCase())) {
         return processName
@@ -140,7 +136,6 @@ function startGameDetection() {
           processName: detectedGame,
         })
       }
-      console.log(detectedGame ? `🎮 Jeu détecté: ${gameInfo?.name}` : '🎮 Aucun jeu détecté')
     }
   }, 5000)
 }
@@ -173,7 +168,7 @@ function setupAutoUpdater(win: BrowserWindow) {
     win.webContents.send('update:downloaded')
   })
   autoUpdater.on('error', (err) => {
-    console.error('⚠️ Auto-updater error:', err.message)
+    console.error('Auto-updater error:', err.message)
   })
   autoUpdater.checkForUpdates()
   setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000)
@@ -190,7 +185,10 @@ function createOverlayWindow() {
     width: 320, height: 200, x: width - 340, y: 20,
     frame: false, transparent: true, alwaysOnTop: true,
     skipTaskbar: true, resizable: true, hasShadow: false,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false, sandbox: false,
+    },
   })
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
   overlayWindow.setVisibleOnAllWorkspaces(true)
@@ -219,21 +217,22 @@ ipcMain.on('overlay:translation', (_event, data) => {
 function createSelectionWindow() {
   if (selectionWindow) return
   const displays = screen.getAllDisplays()
-  console.log('🖥️ Écrans détectés:', displays.map(d => `${d.bounds.x},${d.bounds.y} ${d.bounds.width}x${d.bounds.height} scale=${d.scaleFactor}`))
   const minX = Math.min(...displays.map(d => d.bounds.x))
   const minY = Math.min(...displays.map(d => d.bounds.y))
   const maxX = Math.max(...displays.map(d => d.bounds.x + d.bounds.width))
   const maxY = Math.max(...displays.map(d => d.bounds.y + d.bounds.height))
   const totalWidth = maxX - minX
   const totalHeight = maxY - minY
-  console.log(`🖥️ Fenêtre sélection: x=${minX} y=${minY} w=${totalWidth} h=${totalHeight}`)
 
   selectionWindow = new BrowserWindow({
     width: totalWidth, height: totalHeight, x: minX, y: minY,
     frame: false, transparent: true, alwaysOnTop: true,
     skipTaskbar: true, resizable: false, movable: false,
     enableLargerThanScreen: true,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false, sandbox: false,
+    },
   })
   selectionWindow.setAlwaysOnTop(true, 'screen-saver')
   selectionWindow.setVisibleOnAllWorkspaces(true)
@@ -251,16 +250,8 @@ function closeSelectionWindow() {
 }
 
 ipcMain.handle('ocr:init', async () => { await initOCR(); return { success: true } })
-
-ipcMain.handle('ocr:openSelection', () => {
-  createSelectionWindow()
-  return { success: true }
-})
-
-ipcMain.handle('ocr:closeSelection', () => {
-  closeSelectionWindow()
-  return { success: true }
-})
+ipcMain.handle('ocr:openSelection', () => { createSelectionWindow(); return { success: true } })
+ipcMain.handle('ocr:closeSelection', () => { closeSelectionWindow(); return { success: true } })
 
 ipcMain.handle('ocr:zoneSelected', async (_event, zone) => {
   closeSelectionWindow()
@@ -270,9 +261,7 @@ ipcMain.handle('ocr:zoneSelected', async (_event, zone) => {
     mainWindow.show()
     mainWindow.webContents.send('ocr:capturing', true)
   }
-  console.log('[OCR] Zone absolue sélectionnée:', zone)
   await startCapture(zone, (buffer) => {
-    console.log('[OCR] Envoi image au renderer, taille:', buffer.length)
     if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
   })
   return { success: true }
@@ -289,28 +278,6 @@ ipcMain.handle('ocr:stop', () => {
   stopCapture()
   return { success: true }
 })
-
-function renameVBAudioDevice() {
-  if (process.platform !== 'win32') return
-  try {
-    const script = `
-      $audioReg = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\Capture"
-      if (Test-Path $audioReg) {
-        Get-ChildItem $audioReg | ForEach-Object {
-          $friendlyName = (Get-ItemProperty -Path "$($_.PSPath)\\Properties" -ErrorAction SilentlyContinue)
-          if ($friendlyName -and $friendlyName."{a45c254e-df1c-4efd-8020-67d146a850e0},2" -like "*CABLE Output*") {
-            Set-ItemProperty -Path "$($_.PSPath)\\Properties" -Name "{a45c254e-df1c-4efd-8020-67d146a850e0},2" -Value "GGTranslate Mic" -ErrorAction SilentlyContinue
-          }
-        }
-      }
-    `
-    execSync(`powershell -Command "${script.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`, {
-      stdio: 'pipe', timeout: 5000,
-    })
-  } catch (err) {
-    console.log('⚠️ Renommage GGTranslate Mic — nécessite admin rights')
-  }
-}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -340,7 +307,6 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(['media', 'audioCapture', 'desktopCapture'].includes(permission))
   })
-  renameVBAudioDevice()
   createWindow()
   startGameDetection()
   if (!isDev) setupAutoUpdater(mainWindow!)
@@ -377,9 +343,7 @@ ipcMain.handle('other-players:start', async (_event, language: string, targetLan
 ipcMain.handle('other-players:stop', async () => { stopOtherPlayersPipeline(); return { success: true } })
 
 ipcMain.handle('virtual-audio:list-devices', async () => {
-  const devices = listAudioDevices()
-  console.log('🔊 Devices audio disponibles:', devices.map(d => d.name))
-  return devices
+  return listAudioDevices()
 })
 ipcMain.handle('virtual-audio:play', async (_event, deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) => {
   const buffer = Buffer.from(pcmBuffer)
