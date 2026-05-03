@@ -12,7 +12,7 @@ import { speakTranslation } from '../lib/tts'
 import { updateStats } from '../lib/stats'
 
 const API_URL = 'https://ggtranslatebackend-production.up.railway.app'
-const DISCORD_API = 'http://localhost:3001'
+const DISCORD_API = 'https://ggtranslatebackend-production.up.railway.app'
 
 const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse']
 
