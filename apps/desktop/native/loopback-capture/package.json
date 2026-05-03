@@ -1,6 +1,6 @@
 {
     "name": "loopback-capture",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Windows Application Loopback Audio Capture native addon",
     "main": "build/Release/loopback_capture.node",
     "scripts": {
