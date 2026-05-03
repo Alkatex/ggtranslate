@@ -15,6 +15,7 @@ import { ProfilePage } from './pages/Profile'
 import { StatsPage } from './pages/Stats'
 import { useAuthStore } from './store/auth'
 import { useThemeStore } from './store/theme'
+import { supabase } from './lib/supabase'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -30,7 +31,22 @@ function AppRoutes() {
   const isOCRSelect = location.pathname === '/ocr-select'
 
   useEffect(() => {
+    // Refresh session au démarrage
     refreshSession()
+
+    // Écoute les changements auth — capte le retour Google OAuth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+          await useAuthStore.getState().refreshSession()
+        }
+        if (event === 'SIGNED_OUT') {
+          useAuthStore.setState({ user: null, isAuthenticated: false })
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
   }, [])
 
   if (isOCRSelect) {

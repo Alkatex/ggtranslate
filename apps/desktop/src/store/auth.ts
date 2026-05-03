@@ -54,7 +54,10 @@ export const useAuthStore = create<AuthState>()(
       signInWithGoogle: async () => {
         await supabase.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo: 'ggtranslate://auth/callback' }
+          options: {
+            redirectTo: window.location.origin,
+            skipBrowserRedirect: false,
+          }
         })
       },
 
@@ -89,7 +92,6 @@ export const useAuthStore = create<AuthState>()(
         else if (subscription?.plan === 'starter') plan = 'starter'
         else if (profile && !profile.trial_used) plan = 'trial'
 
-        // -1 = illimité (pro), sinon calcul normal
         let secondsRemaining: number
         if (plan === 'pro') {
           secondsRemaining = -1
@@ -105,7 +107,7 @@ export const useAuthStore = create<AuthState>()(
       consumeSeconds: async (seconds: number) => {
         const { user, profile, secondsRemaining, plan } = get()
         if (!user || !profile) return
-        if (plan === 'pro') return // Pro = illimité, pas de décompte
+        if (plan === 'pro') return
 
         const newRemaining = Math.max(0, secondsRemaining - seconds)
         set({ secondsRemaining: newRemaining })
