@@ -2,12 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import { getAvailableLanguages } from '../lib/languages'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabase'
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-)
 
 interface Group {
   id: string
