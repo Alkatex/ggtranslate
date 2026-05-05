@@ -74,18 +74,30 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get()
         if (!user) return
 
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
+        // Retry 3 fois si subscription pas trouvée
+        let profile = null
+        let subscription = null
 
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .single()
+        for (let i = 0; i < 3; i++) {
+          const { data: p } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single()
+
+          const { data: s } = await supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .single()
+
+          profile = p
+          subscription = s
+
+          if (subscription?.plan) break
+          if (i < 2) await new Promise(r => setTimeout(r, 800))
+        }
 
         let plan: Plan = 'free'
         if (subscription?.plan === 'pro') plan = 'pro'
@@ -125,7 +137,14 @@ export const useAuthStore = create<AuthState>()(
           set({ user: data.session.user, isAuthenticated: true })
           await get().loadProfile()
         } else {
-          set({ user: null, isAuthenticated: false })
+          await new Promise(r => setTimeout(r, 1000))
+          const { data: retryData } = await supabase.auth.getSession()
+          if (retryData.session?.user) {
+            set({ user: retryData.session.user, isAuthenticated: true })
+            await get().loadProfile()
+          } else {
+            set({ user: null, isAuthenticated: false })
+          }
         }
       },
 
@@ -151,6 +170,9 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        plan: state.plan,
+        subscription: state.subscription,
+        secondsRemaining: state.secondsRemaining,
       }),
     }
   )
