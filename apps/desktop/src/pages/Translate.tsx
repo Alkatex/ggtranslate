@@ -118,6 +118,7 @@ export function TranslatePage() {
   const targetLangRef = useRef(targetLang)
   const sourceLangRef = useRef(sourceLang)
   const sessionStartRef = useRef<number | null>(null)
+  const langsLoadedRef = useRef(false) // ← Fix persistance langues
 
   useEffect(() => { targetLangRef.current = targetLang }, [targetLang])
   useEffect(() => { sourceLangRef.current = sourceLang }, [sourceLang])
@@ -142,18 +143,28 @@ export function TranslatePage() {
     return () => { pipelineRef.current?.stop(); stopOtherPlayers() }
   }, [])
 
+  // ← Fix persistance langues — charge d'abord, sauvegarde ensuite
   useEffect(() => {
     async function loadSavedLangs() {
       const savedSource = await window.electron.settings.get('sourceLang') as string
       const savedTarget = await window.electron.settings.get('targetLang') as string
       if (savedSource) setSourceLang(savedSource)
       if (savedTarget) setTargetLang(savedTarget)
+      langsLoadedRef.current = true
     }
     loadSavedLangs()
   }, [])
 
-  useEffect(() => { window.electron.settings.set('sourceLang', sourceLang) }, [sourceLang])
-  useEffect(() => { window.electron.settings.set('targetLang', targetLang) }, [targetLang])
+  useEffect(() => {
+    if (!langsLoadedRef.current) return
+    window.electron.settings.set('sourceLang', sourceLang)
+  }, [sourceLang])
+
+  useEffect(() => {
+    if (!langsLoadedRef.current) return
+    window.electron.settings.set('targetLang', targetLang)
+  }, [targetLang])
+
   useEffect(() => { if (myFeedRef.current) myFeedRef.current.scrollTop = myFeedRef.current.scrollHeight }, [myFeed])
   useEffect(() => { if (otherFeedRef.current) otherFeedRef.current.scrollTop = otherFeedRef.current.scrollHeight }, [otherFeed])
 
@@ -348,7 +359,6 @@ export function TranslatePage() {
         ::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 99px; }
       `}</style>
 
-      {/* BADGES FLOTTANTS */}
       {showSessionBadge && (
         <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(to right, #3b82f6, #06b6d4)', borderRadius: '99px', padding: '10px 20px', zIndex: 500, animation: 'badge-pop 0.4s ease', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '18px' }}>🏆</span>
@@ -356,7 +366,6 @@ export function TranslatePage() {
         </div>
       )}
 
-      {/* UPGRADE POPUP */}
       {showUpgradePopup && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           <div style={{ background: '#0d1424', border: '1px solid rgba(249,115,22,0.5)', borderRadius: '20px', padding: '32px', maxWidth: '420px', width: '100%', textAlign: 'center', animation: 'slide-down 0.3s ease' }}>
@@ -373,7 +382,7 @@ export function TranslatePage() {
         </div>
       )}
 
-      {/* SIDEBAR GAUCHE */}
+      {/* SIDEBAR */}
       <div style={{ width: '68px', height: '100vh', background: '#080d18', borderRight: '1px solid #0f1a2e', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: '4px', flexShrink: 0, zIndex: 10 }}>
         <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
           <span style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '12px', fontWeight: 900 }}>GG</span>
@@ -437,7 +446,6 @@ export function TranslatePage() {
         )}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-          {/* Sélecteur langue */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <div style={{ flex: 1 }}>
               <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.12em', marginBottom: '5px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.speak')}</div>
@@ -454,7 +462,6 @@ export function TranslatePage() {
             </div>
           </div>
 
-          {/* Bouton LIVE */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px', padding: '24px', background: '#0d1424', borderRadius: '16px', border: `1px solid ${liveState !== 'inactive' ? liveColors[liveState] + '44' : '#1e2d45'}`, transition: 'border-color 0.3s' }}>
             <button onClick={toggleLive} disabled={isLocked} style={{ width: '100px', height: '100px', borderRadius: '50%', background: liveState === 'listening' ? 'rgba(6,182,212,0.1)' : '#111827', border: `2px solid ${liveColors[liveState]}`, cursor: isLocked ? 'not-allowed' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', transition: 'all 0.2s', opacity: isLocked ? 0.7 : 1, animation: liveState === 'listening' ? 'pulse-cyan 2s ease infinite' : 'none' }}>
               <span style={{ fontSize: '28px', color: liveColors[liveState] }}>◉</span>
@@ -470,7 +477,6 @@ export function TranslatePage() {
             )}
             {errorMsg && <div style={{ color: '#ef4444', fontSize: '12px' }}>{errorMsg}</div>}
 
-            {/* AUTRES JOUEURS */}
             <div style={{ width: '100%', paddingTop: '12px', borderTop: '1px solid #1e2d45' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -483,11 +489,7 @@ export function TranslatePage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    onClick={() => setOtherPlayersTTS(!otherPlayersTTS)}
-                    title={otherPlayersTTS ? 'Désactiver la voix' : 'Activer la voix'}
-                    style={{ background: otherPlayersTTS ? 'rgba(6,182,212,0.15)' : 'rgba(71,85,105,0.15)', border: `1px solid ${otherPlayersTTS ? '#06b6d4' : '#1e2d45'}`, color: otherPlayersTTS ? '#06b6d4' : '#475569', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
+                  <button onClick={() => setOtherPlayersTTS(!otherPlayersTTS)} style={{ background: otherPlayersTTS ? 'rgba(6,182,212,0.15)' : 'rgba(71,85,105,0.15)', border: `1px solid ${otherPlayersTTS ? '#06b6d4' : '#1e2d45'}`, color: otherPlayersTTS ? '#06b6d4' : '#475569', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     {otherPlayersTTS ? '🔊' : '🔇'}
                     <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '9px' }}>{otherPlayersTTS ? 'VOIX' : 'TEXTE'}</span>
                   </button>
@@ -505,7 +507,6 @@ export function TranslatePage() {
             </div>
           </div>
 
-          {/* Feed tabs */}
           <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', overflow: 'hidden' }}>
             <div style={{ display: 'flex', borderBottom: '1px solid #1e2d45' }}>
               <button onClick={() => setActiveTab('my')} style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: activeTab === 'my' ? '#06b6d4' : '#475569', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.08em', borderBottom: activeTab === 'my' ? '2px solid #06b6d4' : '2px solid transparent', transition: 'all 0.2s' }}>

@@ -68,6 +68,8 @@ export const useAuthStore = create<AuthState>()(
           subscription: null, plan: 'free',
           secondsRemaining: -1, isAuthenticated: false,
         })
+        // Force la navigation vers login
+        window.location.hash = '#/login'
       },
 
       loadProfile: async () => {

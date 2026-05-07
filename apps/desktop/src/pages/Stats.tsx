@@ -37,19 +37,29 @@ export function StatsPage() {
   useEffect(() => { loadStats() }, [])
 
   async function loadStats() {
-    if (!user) return
+    if (!user) { setLoading(false); return }
     setLoading(true)
-    const { data } = await supabase.from('user_stats').select('*').eq('id', user.id).single()
-    if (data) {
-      setStats({
-        total_phrases: data.total_phrases || 0,
-        total_sessions: data.total_sessions || 0,
-        total_minutes: data.total_minutes || 0,
-        top_languages: data.top_languages || [],
-        top_games: data.top_games || [],
-      })
+    try {
+      const result = await Promise.race([
+        supabase.from('user_stats').select('*').eq('id', user.id).single(),
+        new Promise<{ data: null, error: any }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: 'timeout' }), 5000)
+        )
+      ])
+      if (result.data) {
+        setStats({
+          total_phrases: result.data.total_phrases || 0,
+          total_sessions: result.data.total_sessions || 0,
+          total_minutes: result.data.total_minutes || 0,
+          top_languages: result.data.top_languages || [],
+          top_games: result.data.top_games || [],
+        })
+      }
+    } catch (err) {
+      console.error('Erreur stats:', err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const unlockedAchievements = ACHIEVEMENTS.filter(a => a.req(stats))
