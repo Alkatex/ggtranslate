@@ -38,7 +38,7 @@ router.get('/check/:guildId', async (req, res) => {
 router.get('/invite', (_req, res) => {
   const clientId = process.env.DISCORD_CLIENT_ID || '1499073387828609094'
   // 8 = Administrateur — permet tout incluant créer des salons
-  const url = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=8&scope=bot%20applications.commands`
+  const url = `https://discord.com/oauth2/authorize?client_id=1499073387828609094&permissions=19472&integration_type=0&scope=bot+applications.commands`
   res.json({ url })
 })
 
