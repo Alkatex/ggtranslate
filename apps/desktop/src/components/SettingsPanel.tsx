@@ -193,7 +193,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           <div style={{ color: '#475569', fontSize: '11px', marginBottom: '12px', lineHeight: 1.5 }}>
             Le bot poste les traductions en temps réel dans un canal <strong style={{ color: '#5865f2' }}>#ggtranslate</strong> de ton serveur Discord.
           </div>
-          <button onClick={() => window.electron.shell.openExternal(`https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&permissions=3072&scope=bot`)} style={{ width: '100%', marginBottom: '12px', background: 'rgba(88,101,242,0.15)', border: '1px solid #5865f2', color: '#5865f2', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>
+          {/* ← Fix permissions 19472 */}
+          <button onClick={() => window.electron.shell.openExternal(`https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&permissions=19472&integration_type=0&scope=bot+applications.commands`)} style={{ width: '100%', marginBottom: '12px', background: 'rgba(88,101,242,0.15)', border: '1px solid #5865f2', color: '#5865f2', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'Orbitron, sans-serif' }}>
             {t('settings.discord.invite')}
           </button>
           <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '6px' }}>
