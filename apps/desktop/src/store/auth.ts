@@ -63,12 +63,13 @@ export const useAuthStore = create<AuthState>()(
 
       signOut: async () => {
         await supabase.auth.signOut()
+        // Clear le localStorage Zustand persist
+        localStorage.removeItem('ggtranslate-auth')
         set({
           user: null, profile: null,
           subscription: null, plan: 'free',
           secondsRemaining: -1, isAuthenticated: false,
         })
-        // Force la navigation vers login
         window.location.hash = '#/login'
       },
 

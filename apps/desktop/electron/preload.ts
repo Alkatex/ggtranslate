@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, shell } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('electron', {
   settings: {
@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('electron', {
     requestPermission: () => ipcRenderer.invoke('audio:requestPermission'),
   },
   shell: {
-    openExternal: (url: string) => shell.openExternal(url),
+    openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   },
   updater: {
     install: () => ipcRenderer.invoke('update:install'),
@@ -32,7 +32,6 @@ contextBridge.exposeInMainWorld('electron', {
   overlay: {
     open: () => ipcRenderer.invoke('overlay:open'),
     close: () => ipcRenderer.invoke('overlay:close'),
-    // ─── Envoyer une traduction à l'overlay ──────────────────────────────────
     sendTranslation: (data: any) => ipcRenderer.send('overlay:translation', data),
     onTranslation: (callback: (data: any) => void) => {
       ipcRenderer.on('overlay:translation', (_event, data) => callback(data))
@@ -139,7 +138,7 @@ declare global {
         requestPermission: () => Promise<boolean>
       }
       shell: {
-        openExternal: (url: string) => void
+        openExternal: (url: string) => Promise<void>
       }
       updater: {
         install: () => Promise<void>

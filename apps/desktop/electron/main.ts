@@ -12,7 +12,7 @@ for (let i = 0; i < 6; i++) {
   dir = path.dirname(dir)
 }
 
-import { app, BrowserWindow, ipcMain, session, Menu, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, session, Menu, screen, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import Store from 'electron-store'
 import { startSTTSession, sendAudioChunk, stopSTTSession } from './sttService'
@@ -326,6 +326,11 @@ ipcMain.handle('settings:set', (_event, key: string, value: unknown) => { store.
 ipcMain.handle('settings:getAll', () => store.store)
 ipcMain.handle('app:getVersion', () => app.getVersion())
 ipcMain.handle('app:getPlatform', () => process.platform)
+
+// ← Fix shell.openExternal via ipcMain
+ipcMain.handle('shell:openExternal', (_event, url: string) => {
+  shell.openExternal(url)
+})
 
 ipcMain.handle('stt:start', async (_event, language: string) => {
   if (!mainWindow) throw new Error('Fenêtre non disponible')
