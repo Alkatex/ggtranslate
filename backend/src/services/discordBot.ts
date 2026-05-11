@@ -14,9 +14,17 @@ client.once('ready', () => {
   isReady = true
 })
 
-client.login(process.env.DISCORD_BOT_TOKEN).catch(err => {
-  console.error('❌ Discord bot login error:', err.message)
-})
+// ← Attendre que les variables d'env soient chargées
+setTimeout(() => {
+  const token = process.env.DISCORD_BOT_TOKEN
+  if (!token) {
+    console.warn('⚠️ DISCORD_BOT_TOKEN manquant — bot Discord désactivé')
+    return
+  }
+  client.login(token).catch(err => {
+    console.error('❌ Discord bot login error:', err.message)
+  })
+}, 2000)
 
 async function getOrCreateChannel(guildId: string): Promise<TextChannel | null> {
   try {
