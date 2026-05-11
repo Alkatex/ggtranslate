@@ -41,7 +41,7 @@ router.get('/check/:guildId', async (req, res) => {
 // GET /discord/invite — lien d'invitation
 router.get('/invite', (_req, res) => {
   const clientId = process.env.DISCORD_CLIENT_ID
-  const permissions = '2048' // Send Messages + View Channels + Manage Channels
+  const permissions = '52224' // Send Messages + View Channels + Manage Channels
   const url = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${permissions}&scope=bot`
   res.json({ url })
 })
