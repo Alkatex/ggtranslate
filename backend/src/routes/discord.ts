@@ -3,7 +3,6 @@ import { postTranslation, checkBotInGuild, getBotGuilds } from '../services/disc
 
 const router = Router()
 
-// POST /discord/translate — poster une traduction
 router.post('/translate', async (req, res) => {
   const {
     guildId, original, translated,
@@ -26,23 +25,20 @@ router.post('/translate', async (req, res) => {
   return res.json(result)
 })
 
-// GET /discord/guilds — serveurs du bot
 router.get('/guilds', async (_req, res) => {
   const guilds = await getBotGuilds()
   res.json({ guilds })
 })
 
-// GET /discord/check/:guildId — vérifier si bot dans serveur
 router.get('/check/:guildId', async (req, res) => {
   const inGuild = await checkBotInGuild(req.params.guildId)
   res.json({ inGuild })
 })
 
-// GET /discord/invite — lien d'invitation
 router.get('/invite', (_req, res) => {
-  const clientId = process.env.DISCORD_CLIENT_ID
-  const permissions = '2064' // Send Messages + View Channels + Manage Channels
-  const url = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${permissions}&scope=bot`
+  const clientId = process.env.DISCORD_CLIENT_ID || '1499073387828609094'
+  // 8 = Administrateur — permet tout incluant créer des salons
+  const url = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=8&scope=bot%20applications.commands`
   res.json({ url })
 })
 
