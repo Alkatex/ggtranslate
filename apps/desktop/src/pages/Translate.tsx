@@ -42,10 +42,97 @@ async function sendToDiscord(opts: {
   } catch {}
 }
 
+// ── ICÔNES SVG CUSTOM ──────────────────────────────────────────────────────
+const IconMic = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="2" width="6" height="11" rx="3"/>
+    <path d="M5 10a7 7 0 0 0 14 0"/>
+    <line x1="12" y1="17" x2="12" y2="21"/>
+    <line x1="9" y1="21" x2="15" y2="21"/>
+  </svg>
+)
+
+const IconGroups = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="7" r="3"/>
+    <circle cx="16" cy="7" r="2.5" opacity="0.7"/>
+    <path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/>
+    <path d="M16 14c2.2.5 4 2.3 4 4.5" opacity="0.7"/>
+  </svg>
+)
+
+const IconStats = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+    <polyline points="16 7 22 7 22 13"/>
+    <circle cx="8.5" cy="10.5" r="1.5" fill={color} stroke="none"/>
+    <circle cx="13.5" cy="15.5" r="1.5" fill={color} stroke="none"/>
+  </svg>
+)
+
+const IconProfile = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+  </svg>
+)
+
+const IconOCR = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+    <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+    <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+    <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+    <line x1="8" y1="12" x2="16" y2="12"/>
+    <line x1="8" y1="8" x2="13" y2="8"/>
+    <line x1="8" y1="16" x2="11" y2="16"/>
+  </svg>
+)
+
+const IconOverlay = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2"/>
+    <rect x="6" y="7" width="8" height="6" rx="1" opacity="0.5"/>
+    <line x1="2" y1="20" x2="22" y2="20" opacity="0.4"/>
+    <line x1="12" y1="17" x2="12" y2="20" opacity="0.4"/>
+    <circle cx="17" cy="10" r="2" fill={color} stroke="none" opacity="0.7"/>
+  </svg>
+)
+
+const IconPricing = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+)
+
+const IconTheme = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+  </svg>
+)
+
+const IconSettings = ({ color = 'currentColor' }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+)
+
+const IconSignOut = ({ color = 'currentColor' }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+)
+
+// ── NAV ITEM ──────────────────────────────────────────────────────────────
 function NavItem({ icon, label, active, onClick, color }: {
-  icon: string; label: string; active?: boolean; onClick: () => void; color?: string
+  icon: React.ReactNode; label: string; active?: boolean; onClick: () => void; color?: string
 }) {
   const [hovered, setHovered] = useState(false)
+  const activeColor = color || '#06b6d4'
   return (
     <div
       onClick={onClick}
@@ -55,15 +142,16 @@ function NavItem({ icon, label, active, onClick, color }: {
         position: 'relative', width: '48px', height: '48px',
         borderRadius: '12px', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: active ? 'rgba(6,182,212,0.15)' : hovered ? 'rgba(255,255,255,0.05)' : 'transparent',
-        border: active ? `1px solid ${color || '#06b6d4'}` : '1px solid transparent',
-        transition: 'all 0.18s', fontSize: '18px',
+        background: active ? `${activeColor}18` : hovered ? 'rgba(255,255,255,0.04)' : 'transparent',
+        border: active ? `1px solid ${activeColor}55` : '1px solid transparent',
+        transition: 'all 0.18s',
+        color: active ? activeColor : hovered ? '#94a3b8' : '#475569',
       }}
       title={label}
     >
       {icon}
       {active && (
-        <div style={{ position: 'absolute', left: '-1px', top: '50%', transform: 'translateY(-50%)', width: '3px', height: '20px', background: color || '#06b6d4', borderRadius: '0 3px 3px 0' }} />
+        <div style={{ position: 'absolute', left: '-1px', top: '50%', transform: 'translateY(-50%)', width: '3px', height: '20px', background: activeColor, borderRadius: '0 3px 3px 0' }} />
       )}
     </div>
   )
@@ -118,7 +206,7 @@ export function TranslatePage() {
   const targetLangRef = useRef(targetLang)
   const sourceLangRef = useRef(sourceLang)
   const sessionStartRef = useRef<number | null>(null)
-  const langsLoadedRef = useRef(false) // ← Fix persistance langues
+  const langsLoadedRef = useRef(false)
 
   useEffect(() => { targetLangRef.current = targetLang }, [targetLang])
   useEffect(() => { sourceLangRef.current = sourceLang }, [sourceLang])
@@ -143,7 +231,6 @@ export function TranslatePage() {
     return () => { pipelineRef.current?.stop(); stopOtherPlayers() }
   }, [])
 
-  // ← Fix persistance langues — charge d'abord, sauvegarde ensuite
   useEffect(() => {
     async function loadSavedLangs() {
       const savedSource = await window.electron.settings.get('sourceLang') as string
@@ -387,23 +474,31 @@ export function TranslatePage() {
         <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
           <span style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '12px', fontWeight: 900 }}>GG</span>
         </div>
-        <NavItem icon="🎤" label="Traduction" active onClick={() => {}} />
-        <NavItem icon="👥" label="Groupes" onClick={() => navigate('/groups')} />
-        <NavItem icon="📊" label="Stats" onClick={() => navigate('/stats')} />
-        <NavItem icon="👤" label="Profil" onClick={() => navigate('/profile')} />
-        <NavItem icon="📷" label="OCR" onClick={() => navigate('/ocr')} />
-        <NavItem icon="⧉" label="Overlay" onClick={() => window.electron.overlay.open()} />
-        <NavItem icon="💰" label="Plans" onClick={() => navigate('/pricing')} color="#f97316" />
+        <NavItem icon={<IconMic />} label="Traduction" active onClick={() => {}} />
+        <NavItem icon={<IconGroups />} label="Groupes" onClick={() => navigate('/groups')} />
+        <NavItem icon={<IconStats />} label="Stats" onClick={() => navigate('/stats')} />
+        <NavItem icon={<IconProfile />} label="Profil" onClick={() => navigate('/profile')} />
+        <NavItem icon={<IconOCR />} label="OCR" onClick={() => navigate('/ocr')} />
+        <NavItem icon={<IconOverlay />} label="Overlay" onClick={() => window.electron.overlay.open()} />
+        <NavItem icon={<IconPricing />} label="Plans" onClick={() => navigate('/pricing')} color="#f97316" />
         <div style={{ flex: 1 }} />
-        <NavItem icon="🎨" label="Thème" onClick={() => setShowTheme(true)} />
-        <NavItem icon="⚙️" label="Paramètres" onClick={() => setShowSettings(true)} />
-        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: `${planColor}22`, border: `1px solid ${planColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginTop: '4px' }} onClick={() => navigate('/pricing')}>
-          <span style={{ fontSize: '14px' }}>{plan === 'pro' ? '⚡' : plan === 'starter' ? '🚀' : plan === 'trial' ? '⭐' : '🆓'}</span>
+        <NavItem icon={<IconTheme />} label="Thème" onClick={() => setShowTheme(true)} />
+        <NavItem icon={<IconSettings />} label="Paramètres" onClick={() => setShowSettings(true)} />
+        <div
+          style={{ width: '40px', height: '40px', borderRadius: '10px', background: `${planColor}22`, border: `1px solid ${planColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginTop: '4px', color: planColor }}
+          onClick={() => navigate('/pricing')}
+        >
+          <IconPricing color={planColor} />
         </div>
-        <div onClick={signOut} title={t('translate.signout')} style={{ width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', opacity: 0.5, transition: 'opacity 0.2s', marginBottom: '4px' }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
-        >🚪</div>
+        <div
+          onClick={signOut}
+          title={t('translate.signout')}
+          style={{ width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s, color 0.2s', marginBottom: '4px', color: '#475569' }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444' }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '0.4'; e.currentTarget.style.color = '#475569' }}
+        >
+          <IconSignOut />
+        </div>
       </div>
 
       {/* ZONE PRINCIPALE */}

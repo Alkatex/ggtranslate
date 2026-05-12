@@ -30,123 +30,152 @@ let selectionWindow: BrowserWindow | null = null
 let gameDetectionInterval: ReturnType<typeof setInterval> | null = null
 let lastDetectedGame: string | null = null
 
-const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
-  'valorant': {
-    name: 'Valorant', emoji: '🎯',
-    phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Défendez le site', '💣 Spike posé', '🔍 Clear !'],
-  },
-  'csgo': {
-    name: 'CS2', emoji: '💣',
-    phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'],
-  },
-  'cs2': {
-    name: 'CS2', emoji: '💣',
-    phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'],
-  },
-  'leagueoflegends': {
-    name: 'League of Legends', emoji: '⚔️',
-    phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'],
-  },
-  'riotclientservices': {
-    name: 'League of Legends', emoji: '⚔️',
-    phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'],
-  },
-  'fortnite': {
-    name: 'Fortnite', emoji: '🏗️',
-    phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'],
-  },
-  'fortniteclient': {
-    name: 'Fortnite', emoji: '🏗️',
-    phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'],
-  },
-  'warzone': {
-    name: 'Warzone', emoji: '🪂',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '🚗 Véhicule', '🪂 Gulag'],
-  },
-  'modernwarfare': {
-    name: 'Call of Duty', emoji: '🔫',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
-  },
-  'cod': {
-    name: 'Call of Duty', emoji: '🔫',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
-  },
-  'codmw': {
-    name: 'Call of Duty', emoji: '🔫',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
-  },
-  'overwatch': {
-    name: 'Overwatch 2', emoji: '🦸',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'],
-  },
-  'overwatch2': {
-    name: 'Overwatch 2', emoji: '🦸',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'],
-  },
-  'apexlegends': {
-    name: 'Apex Legends', emoji: '⚡',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'],
-  },
-  'r5apex': {
-    name: 'Apex Legends', emoji: '⚡',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'],
-  },
-  'tslgame': {
-    name: 'PUBG', emoji: '🐔',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On loot', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Zone', '🚗 Véhicule', '🏠 On entre'],
-  },
-  'dota2': {
-    name: 'Dota 2', emoji: '🏰',
-    phrases: ['🎯 Ennemi repéré', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🐉 Roshan bientôt', '💀 Attention', '🗼 Défendez'],
-  },
-  'javaw': {
-    name: 'Minecraft', emoji: '⛏️',
-    phrases: ['🏃 Suivez-moi', '⛏️ On mine', '🏠 On build', '✅ Bien joué', '💀 Attention mob', '🌙 Nuit bientôt', '🔴 Danger'],
-  },
-  'rocketleague': {
-    name: 'Rocket League', emoji: '🚗',
-    phrases: ['🎯 Shot !', '🚗 Centering', '✅ Bien joué', '🔴 Defend', '⚡ Boost', '💨 Fast', '🏆 GG'],
-  },
-  'rainbow6': {
-    name: 'Rainbow Six Siege', emoji: '🛡️',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '💣 Bombe', '🔍 Clear !'],
-  },
-  'r6siege': {
-    name: 'Rainbow Six Siege', emoji: '🛡️',
-    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '💣 Bombe', '🔍 Clear !'],
-  },
+// ── Jeux connus avec phrases custom ──────────────────────────────────────
+const KNOWN_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
+  'valorant': { name: 'Valorant', emoji: '🎯', phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Défendez le site', '💣 Spike posé', '🔍 Clear !'] },
+  'csgo': { name: 'CS2', emoji: '💣', phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'] },
+  'cs2': { name: 'CS2', emoji: '💣', phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'] },
+  'leagueoflegends': { name: 'League of Legends', emoji: '⚔️', phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'] },
+  'riotclientservices': { name: 'League of Legends', emoji: '⚔️', phrases: ['🔴 Regroupez-vous', '🏃 Suivez-moi', '🎯 Ennemi repéré', '🗼 Défendez la tour', '⚡ On pousse', '🔵 Objectif', '💀 Attention jungle', '🐉 Dragon bientôt', '🏰 Baron bientôt', '📦 On recule', '✅ Bien joué'] },
+  'fortnite': { name: 'Fortnite', emoji: '🏗️', phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'] },
+  'fortniteclient': { name: 'Fortnite', emoji: '🏗️', phrases: ['🎯 Ennemi repéré', '🏗️ On construit', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On rush', '🪂 Atterrissage'] },
+  'warzone': { name: 'Warzone', emoji: '🪂', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '🚗 Véhicule', '🪂 Gulag'] },
+  'modernwarfare': { name: 'Call of Duty', emoji: '🔫', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'] },
+  'cod': { name: 'Call of Duty', emoji: '🔫', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'] },
+  'codmw': { name: 'Call of Duty', emoji: '🔫', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'] },
+  'overwatch': { name: 'Overwatch 2', emoji: '🦸', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'] },
+  'overwatch2': { name: 'Overwatch 2', emoji: '🦸', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'] },
+  'apexlegends': { name: 'Apex Legends', emoji: '⚡', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'] },
+  'r5apex': { name: 'Apex Legends', emoji: '⚡', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push', '💀 Revive', '🏆 Champion'] },
+  'tslgame': { name: 'PUBG', emoji: '🐔', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On loot', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Zone', '🚗 Véhicule', '🏠 On entre'] },
+  'dota2': { name: 'Dota 2', emoji: '🏰', phrases: ['🎯 Ennemi repéré', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🐉 Roshan bientôt', '💀 Attention', '🗼 Défendez'] },
+  'javaw': { name: 'Minecraft', emoji: '⛏️', phrases: ['🏃 Suivez-moi', '⛏️ On mine', '🏠 On build', '✅ Bien joué', '💀 Attention mob', '🌙 Nuit bientôt', '🔴 Danger'] },
+  'rocketleague': { name: 'Rocket League', emoji: '🚗', phrases: ['🎯 Shot !', '🚗 Centering', '✅ Bien joué', '🔴 Defend', '⚡ Boost', '💨 Fast', '🏆 GG'] },
+  'rainbow6': { name: 'Rainbow Six Siege', emoji: '🛡️', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '💣 Bombe', '🔍 Clear !'] },
+  'r6siege': { name: 'Rainbow Six Siege', emoji: '🛡️', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '💣 Bombe', '🔍 Clear !'] },
+  'genshinimpact': { name: 'Genshin Impact', emoji: '✨', phrases: ['🏃 Suivez-moi', '⚔️ On attaque', '💉 Soins', '📦 On recule', '✅ Bien joué', '🌟 Burst prêt'] },
+  'eldenring': { name: 'Elden Ring', emoji: '⚔️', phrases: ['💀 Boss ici', '🏃 Suivez-moi', '⚔️ On attaque', '📦 On recule', '✅ Bien joué', '🔥 Attention'] },
+  'destiny2': { name: 'Destiny 2', emoji: '🚀', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '⚡ Super prêt'] },
+  'lost ark': { name: 'Lost Ark', emoji: '🗺️', phrases: ['🏃 Suivez-moi', '⚔️ On attaque', '💉 Soins', '📦 On recule', '✅ Bien joué'] },
+  'deadbydaylight': { name: 'Dead by Daylight', emoji: '🔦', phrases: ['🏃 Fuyez', '🔦 Killer ici', '🚪 Porte ouverte', '💉 Soins', '✅ Bien joué'] },
+  'newworld': { name: 'New World', emoji: '🌍', phrases: ['🏃 Suivez-moi', '⚔️ On attaque', '💉 Soins', '📦 On recule', '✅ Bien joué'] },
+  'tarkov': { name: 'Escape from Tarkov', emoji: '🎒', phrases: ['🎯 Contact', '📦 On loot', '🏃 Suivez-moi', '💉 Soins', '🔴 Danger'] },
+  'battlefieldv': { name: 'Battlefield V', emoji: '💣', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement'] },
+  'battlefield2042': { name: 'Battlefield 2042', emoji: '💣', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement'] },
+  'starcraft2': { name: 'StarCraft II', emoji: '🛸', phrases: ['⚔️ On attaque', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔵 Expansion'] },
+  'hearthstone': { name: 'Hearthstone', emoji: '🃏', phrases: ['✅ Bien joué', '🎴 Mon tour', '⚔️ Attaque', '🛡️ Défends'] },
+  'worldofwarcraft': { name: 'World of Warcraft', emoji: '🐉', phrases: ['🏃 Suivez-moi', '⚔️ Pull', '💉 Soins', '📦 On recule', '✅ Bien joué', '💀 Mort'] },
+  'wow': { name: 'World of Warcraft', emoji: '🐉', phrases: ['🏃 Suivez-moi', '⚔️ Pull', '💉 Soins', '📦 On recule', '✅ Bien joué', '💀 Mort'] },
+  'ffxiv': { name: 'Final Fantasy XIV', emoji: '🌙', phrases: ['🏃 Suivez-moi', '⚔️ DPS', '💉 Soins', '🛡️ Tank', '✅ Bien joué'] },
+  'seadeals': { name: 'Sea of Thieves', emoji: '🏴‍☠️', phrases: ['⚓ À l\'abordage', '🏃 Suivez-moi', '🦅 Voile', '💉 Soins', '✅ Bien joué'] },
+  'gtav': { name: 'GTA V', emoji: '🚗', phrases: ['🚗 En route', '🏃 Suivez-moi', '💰 Casse', '🚔 Police', '✅ Bien joué'] },
+  'rdr2': { name: 'Red Dead Redemption 2', emoji: '🤠', phrases: ['🤠 En selle', '🏃 Suivez-moi', '🔫 Embuscade', '✅ Bien joué'] },
+  'cyberpunk2077': { name: 'Cyberpunk 2077', emoji: '🌆', phrases: ['🏃 En mouvement', '🎯 Cible', '💉 Soins', '📦 On recule', '✅ Bien joué'] },
+  'witcher3': { name: 'The Witcher 3', emoji: '🗡️', phrases: ['🏃 Suivez-moi', '⚔️ Monstre', '💉 Soins', '✅ Bien joué'] },
 }
+
+// ── Processus système à ignorer ───────────────────────────────────────────
+const SYSTEM_BLACKLIST = new Set([
+  'explorer', 'svchost', 'system', 'idle', 'registry', 'smss', 'csrss',
+  'wininit', 'winlogon', 'services', 'lsass', 'spoolsv', 'taskhost',
+  'dwm', 'conhost', 'rundll32', 'msiexec', 'wuauclt', 'searchui',
+  'shellexperiencehost', 'runtimebroker', 'taskmgr', 'sihost', 'fontdrvhost',
+  'chrome', 'firefox', 'msedge', 'opera', 'brave', 'iexplore', 'safari',
+  'code', 'cursor', 'devenv', 'rider', 'webstorm', 'phpstorm', 'idea',
+  'notepad', 'notepad++', 'sublime_text', 'atom', 'wordpad',
+  'slack', 'discord', 'teams', 'zoom', 'skype', 'telegram', 'whatsapp',
+  'spotify', 'vlc', 'mpv', 'wmplayer', 'itunes',
+  'word', 'excel', 'powerpnt', 'onenote', 'outlook', 'acrobat',
+  'steam', 'epicgameslauncher', 'origin', 'uplay', 'battlenet', 'gog',
+  'nvidia', 'geforce', 'amd', 'msi', 'afterburner', 'rivatuner',
+  'obs', 'obs64', 'streamlabs', 'xsplit',
+  'node', 'python', 'powershell', 'cmd', 'wt', 'windowsterminal',
+  'ggtranslate', 'electron',
+])
 
 const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse']
 
-function detectActiveGame(): string | null {
-  if (process.platform !== 'win32') return null
-  try {
-    // Méthode 1 — scan des processus
-    const output = execSync('powershell -Command "Get-Process | Select-Object -ExpandProperty Name"', {
-      stdio: 'pipe', timeout: 3000, encoding: 'utf8',
-    })
-    const processes = output.split('\n').map(p => p.trim().toLowerCase().replace(/\.exe$/, ''))
+interface DetectedGame {
+  name: string
+  emoji: string
+  phrases: string[]
+  processName: string
+}
 
-    for (const [processName] of Object.entries(SUPPORTED_GAMES)) {
-      if (processes.some(p => p === processName.toLowerCase())) {
-        return processName
+// ── Détection universelle ─────────────────────────────────────────────────
+function detectActiveGame(): DetectedGame | null {
+  if (process.platform !== 'win32') return null
+
+  try {
+    // Récupère tous les processus avec leurs titres de fenêtre et leur CPU
+    const psOutput = execSync(
+      'powershell -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Select-Object Name, MainWindowTitle, CPU | ConvertTo-Json"',
+      { stdio: 'pipe', timeout: 5000, encoding: 'utf8' }
+    ).trim()
+
+    if (!psOutput) return null
+
+    let processes: Array<{ Name: string; MainWindowTitle: string; CPU: number }> = []
+    try {
+      const parsed = JSON.parse(psOutput)
+      processes = Array.isArray(parsed) ? parsed : [parsed]
+    } catch {
+      return null
+    }
+
+    // Filtre les processus système
+    const filtered = processes.filter(p => {
+      const name = (p.Name || '').toLowerCase().replace(/\.exe$/, '')
+      return !SYSTEM_BLACKLIST.has(name) && p.MainWindowTitle && p.MainWindowTitle.trim().length > 0
+    })
+
+    if (filtered.length === 0) return null
+
+    // Trie par CPU décroissant — le jeu actif consomme le plus
+    filtered.sort((a, b) => (b.CPU || 0) - (a.CPU || 0))
+
+    // Méthode 1 — vérifie si un processus connu est dans la liste
+    for (const proc of filtered) {
+      const procName = (proc.Name || '').toLowerCase().replace(/\.exe$/, '')
+      if (KNOWN_GAMES[procName]) {
+        return {
+          ...KNOWN_GAMES[procName],
+          processName: procName,
+        }
       }
     }
 
-    // Méthode 2 — fallback sur la fenêtre active
-    try {
-      const activeWindow = execSync(
-        'powershell -Command "(Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Sort-Object CPU -Descending | Select-Object -First 1).Name"',
-        { stdio: 'pipe', timeout: 3000, encoding: 'utf8' }
-      ).trim().toLowerCase().replace(/\.exe$/, '')
-
-      for (const [processName] of Object.entries(SUPPORTED_GAMES)) {
-        if (activeWindow.includes(processName.toLowerCase()) || processName.toLowerCase().includes(activeWindow)) {
-          return processName
+    // Méthode 2 — cherche par mots-clés dans le nom du processus
+    for (const proc of filtered) {
+      const procName = (proc.Name || '').toLowerCase().replace(/\.exe$/, '')
+      for (const [key, game] of Object.entries(KNOWN_GAMES)) {
+        if (procName.includes(key) || key.includes(procName)) {
+          return { ...game, processName: procName }
         }
       }
-    } catch {}
+    }
+
+    // Méthode 3 — détection universelle du processus le plus actif
+    // Prend le 1er processus non-système avec le plus de CPU
+    const topProcess = filtered[0]
+    if (topProcess) {
+      const procName = (topProcess.Name || '').toLowerCase().replace(/\.exe$/, '')
+      const windowTitle = topProcess.MainWindowTitle || procName
+
+      // Nettoie le titre pour l'affichage
+      const cleanTitle = windowTitle
+        .replace(/\s*-\s*(Steam|Epic Games|Ubisoft Connect|Battle\.net|GOG).*$/i, '')
+        .replace(/\s*\[\s*\].*$/, '')
+        .trim()
+        .slice(0, 40) || procName
+
+      return {
+        name: cleanTitle,
+        emoji: '🎮',
+        phrases: DEFAULT_PHRASES,
+        processName: procName,
+      }
+    }
 
     return null
   } catch {
@@ -157,16 +186,17 @@ function detectActiveGame(): string | null {
 function startGameDetection() {
   if (gameDetectionInterval) return
   gameDetectionInterval = setInterval(() => {
-    const detectedGame = detectActiveGame()
-    if (detectedGame !== lastDetectedGame) {
-      lastDetectedGame = detectedGame
-      const gameInfo = detectedGame ? SUPPORTED_GAMES[detectedGame] : null
+    const detected = detectActiveGame()
+    const key = detected ? detected.processName : null
+
+    if (key !== lastDetectedGame) {
+      lastDetectedGame = key
       if (mainWindow) {
         mainWindow.webContents.send('game:detected', {
-          game: gameInfo ? gameInfo.name : null,
-          emoji: gameInfo ? gameInfo.emoji : null,
-          phrases: gameInfo ? gameInfo.phrases : DEFAULT_PHRASES,
-          processName: detectedGame,
+          game: detected ? detected.name : null,
+          emoji: detected ? detected.emoji : null,
+          phrases: detected ? detected.phrases : DEFAULT_PHRASES,
+          processName: detected ? detected.processName : null,
         })
       }
     }
@@ -181,13 +211,12 @@ function stopGameDetection() {
 }
 
 ipcMain.handle('game:detect', () => {
-  const detectedGame = detectActiveGame()
-  const gameInfo = detectedGame ? SUPPORTED_GAMES[detectedGame] : null
+  const detected = detectActiveGame()
   return {
-    game: gameInfo ? gameInfo.name : null,
-    emoji: gameInfo ? gameInfo.emoji : null,
-    phrases: gameInfo ? gameInfo.phrases : DEFAULT_PHRASES,
-    processName: detectedGame,
+    game: detected ? detected.name : null,
+    emoji: detected ? detected.emoji : null,
+    phrases: detected ? detected.phrases : DEFAULT_PHRASES,
+    processName: detected ? detected.processName : null,
   }
 })
 
