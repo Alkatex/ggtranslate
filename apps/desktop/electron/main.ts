@@ -67,6 +67,14 @@ const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: st
     name: 'Call of Duty', emoji: '🔫',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
   },
+  'cod': {
+    name: 'Call of Duty', emoji: '🔫',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
+  },
+  'codmw': {
+    name: 'Call of Duty', emoji: '🔫',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On push'],
+  },
   'overwatch': {
     name: 'Overwatch 2', emoji: '🦸',
     phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Groupez-vous', '💜 Ultimate prêt'],
@@ -99,6 +107,14 @@ const SUPPORTED_GAMES: Record<string, { name: string; emoji: string; phrases: st
     name: 'Rocket League', emoji: '🚗',
     phrases: ['🎯 Shot !', '🚗 Centering', '✅ Bien joué', '🔴 Defend', '⚡ Boost', '💨 Fast', '🏆 GG'],
   },
+  'rainbow6': {
+    name: 'Rainbow Six Siege', emoji: '🛡️',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '💣 Bombe', '🔍 Clear !'],
+  },
+  'r6siege': {
+    name: 'Rainbow Six Siege', emoji: '🛡️',
+    phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '💣 Bombe', '🔍 Clear !'],
+  },
 }
 
 const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse']
@@ -106,15 +122,32 @@ const DEFAULT_PHRASES = ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré
 function detectActiveGame(): string | null {
   if (process.platform !== 'win32') return null
   try {
+    // Méthode 1 — scan des processus
     const output = execSync('powershell -Command "Get-Process | Select-Object -ExpandProperty Name"', {
       stdio: 'pipe', timeout: 3000, encoding: 'utf8',
     })
     const processes = output.split('\n').map(p => p.trim().toLowerCase().replace(/\.exe$/, ''))
+
     for (const [processName] of Object.entries(SUPPORTED_GAMES)) {
       if (processes.some(p => p === processName.toLowerCase())) {
         return processName
       }
     }
+
+    // Méthode 2 — fallback sur la fenêtre active
+    try {
+      const activeWindow = execSync(
+        'powershell -Command "(Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Sort-Object CPU -Descending | Select-Object -First 1).Name"',
+        { stdio: 'pipe', timeout: 3000, encoding: 'utf8' }
+      ).trim().toLowerCase().replace(/\.exe$/, '')
+
+      for (const [processName] of Object.entries(SUPPORTED_GAMES)) {
+        if (activeWindow.includes(processName.toLowerCase()) || processName.toLowerCase().includes(activeWindow)) {
+          return processName
+        }
+      }
+    } catch {}
+
     return null
   } catch {
     return null
@@ -327,7 +360,6 @@ ipcMain.handle('settings:getAll', () => store.store)
 ipcMain.handle('app:getVersion', () => app.getVersion())
 ipcMain.handle('app:getPlatform', () => process.platform)
 
-// ← Fix shell.openExternal via ipcMain
 ipcMain.handle('shell:openExternal', (_event, url: string) => {
   shell.openExternal(url)
 })

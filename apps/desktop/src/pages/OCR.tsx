@@ -30,9 +30,33 @@ export function OCRPage() {
   const isProcessingRef = useRef(false)
   const sourceLangRef = useRef(sourceLang)
   const targetLangRef = useRef(targetLang)
+  const ocrLangsLoadedRef = useRef(false)
 
   useEffect(() => { sourceLangRef.current = sourceLang }, [sourceLang])
   useEffect(() => { targetLangRef.current = targetLang }, [targetLang])
+
+  // Charge les langues OCR sauvegardées
+  useEffect(() => {
+    async function loadOCRLangs() {
+      const savedSource = await window.electron.settings.get('ocrSourceLang') as string
+      const savedTarget = await window.electron.settings.get('ocrTargetLang') as string
+      if (savedSource) setSourceLang(savedSource)
+      if (savedTarget) setTargetLang(savedTarget)
+      ocrLangsLoadedRef.current = true
+    }
+    loadOCRLangs()
+  }, [])
+
+  // Sauvegarde quand les langues changent
+  useEffect(() => {
+    if (!ocrLangsLoadedRef.current) return
+    window.electron.settings.set('ocrSourceLang', sourceLang)
+  }, [sourceLang])
+
+  useEffect(() => {
+    if (!ocrLangsLoadedRef.current) return
+    window.electron.settings.set('ocrTargetLang', targetLang)
+  }, [targetLang])
 
   useEffect(() => {
     window.electron.ocr.onCapturing((active: boolean) => {
@@ -52,7 +76,6 @@ export function OCRPage() {
         const { data: { text } } = await (Tesseract as any).recognize(url, 'eng+fra+jpn+kor+rus+spa+deu', { logger: () => {} })
         URL.revokeObjectURL(url)
 
-        // Nettoyage du texte — supprime artefacts et caractères parasites
         const clean = text
           .trim()
           .replace(/\s+/g, ' ')
