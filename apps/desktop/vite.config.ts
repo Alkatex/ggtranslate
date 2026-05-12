@@ -47,6 +47,21 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: true,
+      // ← Fix worklet dans le build packagé
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          'audio-processor.worklet': path.resolve(__dirname, 'src/worklets/audio-processor.worklet.js'),
+        },
+        output: {
+          entryFileNames: (chunkInfo) => {
+            if (chunkInfo.name === 'audio-processor.worklet') {
+              return 'worklets/audio-processor.worklet.js'
+            }
+            return '[name]-[hash].js'
+          },
+        },
+      },
     },
     server: {
       port: 5173,

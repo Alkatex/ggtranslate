@@ -8,16 +8,21 @@ export function HomePage() {
 
   useEffect(() => {
     async function checkSession() {
+      // ← Clear préventif des clés Supabase corrompues
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-') || key.startsWith('supabase')) {
+          localStorage.removeItem(key)
+        }
+      })
+
       const { data } = await supabase.auth.getSession()
 
       if (!data.session?.user) {
-        // Session invalide ou expirée — clear tout et login
         useAuthStore.getState().signOut()
         navigate('/login', { replace: true })
         return
       }
 
-      // Session valide — charge le profil
       await useAuthStore.getState().loadProfile()
 
       const onboardingDone = localStorage.getItem('onboarding_done')

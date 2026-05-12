@@ -25,10 +25,10 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      user: null,
-      profile: null,
-      subscription: null,
-      plan: 'free',
+      user: null as any,
+      profile: null as Profile | null,
+      subscription: null as Subscription | null,
+      plan: 'free' as Plan,
       secondsRemaining: -1,
       isLoading: false,
       isAuthenticated: false,
@@ -63,8 +63,13 @@ export const useAuthStore = create<AuthState>()(
 
       signOut: async () => {
         await supabase.auth.signOut()
-        // Clear le localStorage Zustand persist
         localStorage.removeItem('ggtranslate-auth')
+        localStorage.removeItem('sb-qjnndcxhnlqpzypealtv-auth-token')
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') || key.startsWith('supabase')) {
+            localStorage.removeItem(key)
+          }
+        })
         set({
           user: null, profile: null,
           subscription: null, plan: 'free',
@@ -77,7 +82,6 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get()
         if (!user) return
 
-        // Retry 3 fois si subscription pas trouvée
         let profile = null
         let subscription = null
 

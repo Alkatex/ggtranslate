@@ -75,9 +75,9 @@ export class DeepgramSTT {
       }
 
       // ─── 5. AudioWorklet ─────────────────────────────────────────────────
-      await this.audioCtx.audioWorklet.addModule(
-        new URL('../worklets/audio-processor.worklet.js', import.meta.url)
-      )
+      const workletUrl = new URL('../worklets/audio-processor.worklet.js', import.meta.url)
+await this.audioCtx.audioWorklet.addModule(workletUrl.href)
+      
 
       const source = this.audioCtx.createMediaStreamSource(this.stream)
       this.workletNode = new AudioWorkletNode(this.audioCtx, 'audio-processor', {
