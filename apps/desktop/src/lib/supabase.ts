@@ -7,9 +7,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Supabase URL ou clé manquante dans .env')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false, // ← Important pour Electron
+  }
+})
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 export interface Profile {
   id: string
   display_name: string | null
@@ -37,32 +42,8 @@ export interface Subscription {
 export type Plan = 'free' | 'starter' | 'pro' | 'trial'
 
 export const PLAN_LIMITS = {
-  free: {
-    secondsPerDay: 600,      // 10 min
-    languages: 2,
-    otherPlayers: false,
-    voiceEffects: 0,
-    voiceCloning: false,
-  },
-  starter: {
-    secondsPerDay: 10800,    // 3h
-    languages: 7,
-    otherPlayers: true,
-    voiceEffects: 10,
-    voiceCloning: false,
-  },
-  pro: {
-    secondsPerDay: -1,       // illimité
-    languages: -1,
-    otherPlayers: true,
-    voiceEffects: 50,
-    voiceCloning: true,
-  },
-  trial: {
-    secondsPerDay: 900,      // 15 min
-    languages: -1,
-    otherPlayers: true,
-    voiceEffects: 50,
-    voiceCloning: false,
-  },
+  free: { secondsPerDay: 600, languages: 2, otherPlayers: false, voiceEffects: 0, voiceCloning: false },
+  starter: { secondsPerDay: 10800, languages: 7, otherPlayers: true, voiceEffects: 10, voiceCloning: false },
+  pro: { secondsPerDay: -1, languages: -1, otherPlayers: true, voiceEffects: 50, voiceCloning: true },
+  trial: { secondsPerDay: 900, languages: -1, otherPlayers: true, voiceEffects: 50, voiceCloning: false },
 }

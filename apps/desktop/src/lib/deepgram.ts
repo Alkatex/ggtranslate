@@ -24,6 +24,25 @@ export class DeepgramSTT {
     try {
       window.electron.stt.removeListeners()
 
+      // ─── 0. Vérifie si micro disponible ──────────────────────────────────
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const mics = devices.filter(d => d.kind === 'audioinput')
+      if (mics.length === 0) {
+        this.isRunning = false
+        options.onError('⚙️ Aucun microphone détecté — branche un micro et réessaie')
+        return
+      }
+
+      // Si deviceId spécifié mais introuvable → fallback sur défaut
+      if (deviceId) {
+        const micExists = mics.some(m => m.deviceId === deviceId)
+        if (!micExists) {
+          this.isRunning = false
+          options.onError('⚙️ Microphone introuvable — sélectionne un micro dans les Paramètres')
+          return
+        }
+      }
+
       // ─── 1. Stream micro ─────────────────────────────────────────────────
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -76,8 +95,7 @@ export class DeepgramSTT {
 
       // ─── 5. AudioWorklet ─────────────────────────────────────────────────
       const workletUrl = new URL('../worklets/audio-processor.worklet.js', import.meta.url)
-await this.audioCtx.audioWorklet.addModule(workletUrl.href)
-      
+      await this.audioCtx.audioWorklet.addModule(workletUrl.href)
 
       const source = this.audioCtx.createMediaStreamSource(this.stream)
       this.workletNode = new AudioWorkletNode(this.audioCtx, 'audio-processor', {
@@ -106,7 +124,7 @@ await this.audioCtx.audioWorklet.addModule(workletUrl.href)
         const elapsed = Date.now() - this.lastChunkTime
         if (elapsed > 5000) {
           console.warn('⚠️ AudioWorklet silencieux depuis', elapsed, 'ms')
-          options.onError('Micro inactif — redémarre la session')
+          options.onError('⚙️ Micro inactif — vérifie ton microphone dans les Paramètres')
         }
       }, 5000)
 
@@ -115,7 +133,16 @@ await this.audioCtx.audioWorklet.addModule(workletUrl.href)
     } catch (err: any) {
       console.error('❌ Erreur démarrage STT:', err)
       this.isRunning = false
-      options.onError('Impossible de démarrer: ' + err.message)
+      // ← Messages d'erreur clairs selon le type d'erreur
+      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        options.onError('⚙️ Microphone introuvable — sélectionne un micro dans les Paramètres')
+      } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        options.onError('🔒 Permission micro refusée — autorise l\'accès au micro')
+      } else if (err.name === 'NotReadableError') {
+        options.onError('⚙️ Micro déjà utilisé par une autre app — ferme les autres apps')
+      } else {
+        options.onError('⚙️ Sélectionne un microphone dans les Paramètres')
+      }
     }
   }
 

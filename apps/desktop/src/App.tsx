@@ -17,31 +17,105 @@ import { useAuthStore } from './store/auth'
 import { useThemeStore } from './store/theme'
 import { supabase } from './lib/supabase'
 
+const APP_VERSION = '1.0.4'
+
+let authInProgress = false
+let authDone = false
+
+async function handleVersionMigration() {
+  const savedVersion = localStorage.getItem('app_version')
+  if (savedVersion !== APP_VERSION) {
+    console.log('Nouvelle version détectée → nettoyage session')
+    await supabase.auth.signOut()
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('supabase') || key.includes('sb-')) {
+        localStorage.removeItem(key)
+      }
+    })
+    localStorage.setItem('app_version', APP_VERSION)
+  }
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  const { authState } = useAuthStore()
+  if (authState === 'loading') return <SplashPage />
+  if (authState === 'unauthenticated') return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
 function AppRoutes() {
-  const { isAuthenticated, refreshSession } = useAuthStore()
+  const { isAuthenticated, authState } = useAuthStore()
   const { getTheme } = useThemeStore()
   const theme = getTheme()
   const location = useLocation()
   const isOCRSelect = location.pathname === '/ocr-select'
 
   useEffect(() => {
-    // Refresh session au démarrage
-    refreshSession()
+    if (authInProgress) return
+    authInProgress = true
 
-    // Écoute les changements auth — capte le retour Google OAuth
+    async function initAuth() {
+      try {
+        await handleVersionMigration()
+
+        const { data: { session } } = await supabase.auth.getSession()
+
+        if (session?.user) {
+          useAuthStore.setState({
+            user: session.user,
+            session,
+            isAuthenticated: true,
+            authState: 'authenticated',
+          })
+          await useAuthStore.getState().loadProfile()
+          localStorage.setItem('onboarding_done', 'true')
+        } else {
+          useAuthStore.setState({
+            user: null, session: null,
+            isAuthenticated: false,
+            authState: 'unauthenticated',
+          })
+        }
+      } catch (err) {
+        console.error('initAuth error:', err)
+        useAuthStore.setState({
+          user: null, isAuthenticated: false,
+          authState: 'unauthenticated',
+        })
+      } finally {
+        useAuthStore.setState({ authInitialized: true })
+        authInProgress = false
+        authDone = true
+      }
+    }
+
+    initAuth()
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
-          await useAuthStore.getState().refreshSession()
+        // ← Ignore SIGNED_IN si initAuth pas encore terminé
+        if (!authDone && event === 'SIGNED_IN') return
+
+        if (event === 'SIGNED_IN' && session) {
+          useAuthStore.setState({
+            user: session.user,
+            session,
+            isAuthenticated: true,
+            authState: 'authenticated',
+          })
+          await useAuthStore.getState().loadProfile()
+          localStorage.setItem('onboarding_done', 'true')
+        }
+        if (event === 'TOKEN_REFRESHED' && session) {
+          useAuthStore.setState({ user: session.user, session, isAuthenticated: true })
         }
         if (event === 'SIGNED_OUT') {
-          useAuthStore.setState({ user: null, isAuthenticated: false })
+          useAuthStore.setState({
+            user: null, session: null, isAuthenticated: false,
+            profile: null, subscription: null,
+            plan: 'free', secondsRemaining: -1,
+            authState: 'unauthenticated',
+          })
         }
       }
     )
@@ -49,9 +123,10 @@ function AppRoutes() {
     return () => subscription.unsubscribe()
   }, [])
 
-  if (isOCRSelect) {
-    return <OCRSelectPage />
-  }
+  // ← Bloque TOUT render avant init — affiche Splash
+  if (authState === 'loading') return <SplashPage />
+
+  if (isOCRSelect) return <OCRSelectPage />
 
   return (
     <>

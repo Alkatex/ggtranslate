@@ -31,10 +31,16 @@ export function StatsPage() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { t } = useAppLanguage()
-  const [stats, setStats] = useState<UserStats>({ total_phrases: 0, total_sessions: 0, total_minutes: 0, top_languages: [], top_games: [] })
+  const [stats, setStats] = useState<UserStats>({
+    total_phrases: 0, total_sessions: 0, total_minutes: 0,
+    top_languages: [], top_games: []
+  })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { loadStats() }, [])
+  // ← Dépend de user — attend que initAuth soit terminé
+  useEffect(() => {
+    if (user) loadStats()
+  }, [user])
 
   async function loadStats() {
     if (!user) { setLoading(false); return }
