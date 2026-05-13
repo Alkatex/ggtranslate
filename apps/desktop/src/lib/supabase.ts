@@ -11,7 +11,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false, // ← Important pour Electron
+    detectSessionInUrl: false,
   }
 })
 
@@ -27,6 +27,7 @@ export interface Profile {
   streak_days: number
   last_session_date: string | null
   elevenlabs_voice_id: string | null
+  onboarding_done: boolean // ← nouveau
 }
 
 export interface Subscription {

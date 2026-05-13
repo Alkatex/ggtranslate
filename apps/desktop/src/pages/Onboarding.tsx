@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppLanguage } from '../store/appLanguage'
+import { useAuthStore } from '../store/auth'
+import { supabase } from '../lib/supabase'
 
 function getSteps(t: (key: any) => string) {
   return [
@@ -128,11 +130,17 @@ export function OnboardingPage() {
   const [step, setStep] = useState(0)
   const navigate = useNavigate()
   const { t, lang, setLang } = useAppLanguage()
+  const { user } = useAuthStore()
   const STEPS = getSteps(t)
   const current = STEPS[step]
 
-  const finish = () => {
-    localStorage.setItem('onboarding_done', 'true')
+  const finish = async () => {
+    // ← Sauvegarde onboarding_done dans DB au lieu de localStorage
+    if (user) {
+      await supabase.from('profiles')
+        .update({ onboarding_done: true })
+        .eq('id', user.id)
+    }
     navigate('/login')
   }
 
@@ -145,7 +153,6 @@ export function OnboardingPage() {
         }
       `}</style>
 
-      {/* Lang switcher */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
         {(['fr', 'en', 'es'] as const).map(l => (
           <button key={l} onClick={() => setLang(l)} style={{ background: lang === l ? 'rgba(6,182,212,0.15)' : 'transparent', border: `1px solid ${lang === l ? '#06b6d4' : '#1e2d45'}`, color: lang === l ? '#06b6d4' : '#475569', padding: '3px 9px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', transition: 'all 0.2s' }}>

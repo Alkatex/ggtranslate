@@ -1,5 +1,6 @@
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+
 import { ParticleBackground } from './components/ParticleBackground'
 import { HomePage } from './pages/Home'
 import { OnboardingPage } from './pages/Onboarding'
@@ -13,29 +14,54 @@ import { OCRPage } from './pages/OCR'
 import { OCRSelectPage } from './pages/OCRSelect'
 import { ProfilePage } from './pages/Profile'
 import { StatsPage } from './pages/Stats'
+
 import { useAuthStore } from './store/auth'
 import { useThemeStore } from './store/theme'
 import { supabase } from './lib/supabase'
 
 const APP_VERSION = '1.0.4'
 
-let authInProgress = false
-let authDone = false
+let authInitGuard = false
+let lastProfileLoad = 0
 
+// -------------------------
+// VERSION MIGRATION
+// -------------------------
 async function handleVersionMigration() {
-  const savedVersion = localStorage.getItem('app_version')
-  if (savedVersion !== APP_VERSION) {
-    console.log('Nouvelle version détectée → nettoyage session')
+  const saved = localStorage.getItem('app_version')
+  if (saved !== APP_VERSION) {
     await supabase.auth.signOut()
-    Object.keys(localStorage).forEach(key => {
-      if (key.includes('supabase') || key.includes('sb-')) {
-        localStorage.removeItem(key)
+    Object.keys(localStorage).forEach((k) => {
+      if (k.includes('supabase') || k.includes('sb-')) {
+        localStorage.removeItem(k)
       }
     })
     localStorage.setItem('app_version', APP_VERSION)
   }
 }
 
+// -------------------------
+// PROFILE SAFE LOADER
+// -------------------------
+async function safeLoadProfile(isBoot = false) {
+  const now = Date.now()
+  if (!isBoot && now - lastProfileLoad < 4000) return
+  lastProfileLoad = now
+  await useAuthStore.getState().loadProfile()
+}
+
+// -------------------------
+// ROUTE RESOLVER
+// -------------------------
+function resolveRoute(profile: any, session: any): string {
+  if (!session?.user) return '/login'
+  if (!profile?.onboarding_done) return '/onboarding'
+  return '/translate'
+}
+
+// -------------------------
+// PROTECTED ROUTE
+// -------------------------
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authState } = useAuthStore()
   if (authState === 'loading') return <SplashPage />
@@ -43,20 +69,30 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// -------------------------
+// APP ROUTES
+// -------------------------
 function AppRoutes() {
-  const { isAuthenticated, authState } = useAuthStore()
+  const { authState, profile, session } = useAuthStore()
   const { getTheme } = useThemeStore()
   const theme = getTheme()
-  const location = useLocation()
-  const isOCRSelect = location.pathname === '/ocr-select'
 
+  const [booting, setBooting] = useState(true)
+  const [route, setRoute] = useState<string | null>(null)
+
+  // -------------------------
+  // INIT AUTH
+  // -------------------------
   useEffect(() => {
-    if (authInProgress) return
-    authInProgress = true
+    if (authInitGuard) return
+    authInitGuard = true
 
-    async function initAuth() {
+    async function init() {
+      // ← Splash minimum 5 secondes
+      const minSplash = new Promise(r => setTimeout(r, 5000))
+
       try {
-        await handleVersionMigration()
+        handleVersionMigration().catch(console.error)
 
         const { data: { session } } = await supabase.auth.getSession()
 
@@ -64,57 +100,63 @@ function AppRoutes() {
           useAuthStore.setState({
             user: session.user,
             session,
-            isAuthenticated: true,
             authState: 'authenticated',
           })
-          await useAuthStore.getState().loadProfile()
-          localStorage.setItem('onboarding_done', 'true')
+          await safeLoadProfile(true)
         } else {
           useAuthStore.setState({
-            user: null, session: null,
-            isAuthenticated: false,
+            user: null,
+            session: null,
             authState: 'unauthenticated',
           })
         }
-      } catch (err) {
-        console.error('initAuth error:', err)
+      } catch (e) {
+        console.error(e)
         useAuthStore.setState({
-          user: null, isAuthenticated: false,
+          user: null,
+          session: null,
           authState: 'unauthenticated',
         })
       } finally {
+        // ← Attend 5s minimum avant de cacher le splash
+        await minSplash
+        setBooting(false)
         useAuthStore.setState({ authInitialized: true })
-        authInProgress = false
-        authDone = true
       }
     }
 
-    initAuth()
+    init()
 
+    // -------------------------
+    // AUTH EVENTS
+    // -------------------------
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // ← Ignore SIGNED_IN si initAuth pas encore terminé
-        if (!authDone && event === 'SIGNED_IN') return
-
         if (event === 'SIGNED_IN' && session) {
           useAuthStore.setState({
             user: session.user,
             session,
-            isAuthenticated: true,
             authState: 'authenticated',
           })
-          await useAuthStore.getState().loadProfile()
-          localStorage.setItem('onboarding_done', 'true')
+          await safeLoadProfile(false)
         }
+
         if (event === 'TOKEN_REFRESHED' && session) {
-          useAuthStore.setState({ user: session.user, session, isAuthenticated: true })
+          useAuthStore.setState({
+            session,
+            user: session.user,
+          })
         }
+
         if (event === 'SIGNED_OUT') {
           useAuthStore.setState({
-            user: null, session: null, isAuthenticated: false,
-            profile: null, subscription: null,
-            plan: 'free', secondsRemaining: -1,
+            user: null,
+            session: null,
             authState: 'unauthenticated',
+            profile: null,
+            subscription: null,
+            plan: 'free',
+            secondsRemaining: -1,
           })
         }
       }
@@ -123,32 +165,46 @@ function AppRoutes() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // ← Bloque TOUT render avant init — affiche Splash
-  if (authState === 'loading') return <SplashPage />
+  // -------------------------
+  // ROUTE REACTIVE
+  // -------------------------
+  useEffect(() => {
+    if (authState === 'loading') return
+    setRoute(resolveRoute(profile, session))
+  }, [profile, session, authState])
 
-  if (isOCRSelect) return <OCRSelectPage />
+  // -------------------------
+  // BOOT SCREEN
+  // -------------------------
+  if (booting || authState === 'loading' || route === null) return <SplashPage />
 
   return (
     <>
       <ParticleBackground />
       <div style={{
-        position: 'relative', zIndex: 1,
+        position: 'relative',
+        zIndex: 1,
         filter: theme.filter === 'none' ? undefined : theme.filter,
         minHeight: '100vh',
       }}>
         <Routes>
+          <Route path="/" element={<Navigate to={route} replace />} />
+
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+
+          <Route path="/login" element={
+            authState === 'authenticated'
+              ? <Navigate to={route} replace />
+              : <LoginPage />
+          } />
+
+          <Route path="/pricing" element={<PricingPage />} />
+
           <Route path="/overlay" element={<OverlayPage />} />
           <Route path="/ocr" element={<OCRPage />} />
           <Route path="/ocr-select" element={<OCRSelectPage />} />
-          <Route path="/" element={<SplashPage />} />
-          <Route path="/home" element={<HomePage />} />
-          <Route path="/login" element={
-            isAuthenticated
-              ? <Navigate to="/translate" replace />
-              : <LoginPage />
-          } />
-          <Route path="/onboarding" element={<OnboardingPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
+
           <Route path="/translate" element={
             <ProtectedRoute><TranslatePage /></ProtectedRoute>
           } />
@@ -161,10 +217,11 @@ function AppRoutes() {
           <Route path="/stats" element={
             <ProtectedRoute><StatsPage /></ProtectedRoute>
           } />
+
           <Route path="*" element={
-            isAuthenticated
+            authState === 'authenticated'
               ? <Navigate to="/translate" replace />
-              : <Navigate to="/" replace />
+              : <Navigate to="/login" replace />
           } />
         </Routes>
       </div>
@@ -172,6 +229,9 @@ function AppRoutes() {
   )
 }
 
+// -------------------------
+// ROOT APP
+// -------------------------
 export default function App() {
   return (
     <HashRouter>
