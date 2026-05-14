@@ -135,13 +135,16 @@ export function OnboardingPage() {
   const current = STEPS[step]
 
   const finish = async () => {
-    // ← Sauvegarde onboarding_done dans DB au lieu de localStorage
+    // ← Save onboarding_done dans DB
     if (user) {
       await supabase.from('profiles')
         .update({ onboarding_done: true })
         .eq('id', user.id)
     }
-    navigate('/login')
+    // ← Recharge profile pour avoir onboarding_done = true
+    await useAuthStore.getState().loadProfile()
+    // ← Redirige directement vers translate
+    navigate('/translate', { replace: true })
   }
 
   return (

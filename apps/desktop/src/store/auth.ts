@@ -3,7 +3,6 @@ import { supabase, Profile, Subscription, Plan, PLAN_LIMITS } from '../lib/supab
 
 type AuthStateStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
-// ← Anti race condition loadProfile
 let profileLoading = false
 
 interface AuthState {
@@ -81,7 +80,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   loadProfile: async () => {
-    // ← Anti race condition — jamais 2 loadProfile en parallèle
     if (profileLoading) return
     profileLoading = true
 
@@ -107,7 +105,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         if (i < 2) await new Promise(r => setTimeout(r, 800))
       }
 
-      // ← Plan calculé UNIQUEMENT depuis Supabase DB
       let plan: Plan = 'free'
       if (subscription?.plan === 'pro') plan = 'pro'
       else if (subscription?.plan === 'starter') plan = 'starter'

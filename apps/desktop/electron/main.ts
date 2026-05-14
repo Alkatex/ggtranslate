@@ -30,7 +30,6 @@ let selectionWindow: BrowserWindow | null = null
 let gameDetectionInterval: ReturnType<typeof setInterval> | null = null
 let lastDetectedGame: string | null = null
 
-// ── Jeux connus avec phrases custom ──────────────────────────────────────
 const KNOWN_GAMES: Record<string, { name: string; emoji: string; phrases: string[] }> = {
   'valorant': { name: 'Valorant', emoji: '🎯', phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Grenade !', '✅ Bien joué', '🔫 Rechargement', '🔴 Regroupez-vous', '⚡ On pousse', '🛡️ Défendez le site', '💣 Spike posé', '🔍 Clear !'] },
   'csgo': { name: 'CS2', emoji: '💣', phrases: ['❌ Rush B', '💙 Couvrez-moi', '🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '💜 Flash !', '✅ Bien joué', '🔫 Rechargement', '💣 Bombe posée', '🔍 Clear !', '🪟 Fenêtre !', '⚡ Eco round'] },
@@ -56,7 +55,6 @@ const KNOWN_GAMES: Record<string, { name: string; emoji: string; phrases: string
   'genshinimpact': { name: 'Genshin Impact', emoji: '✨', phrases: ['🏃 Suivez-moi', '⚔️ On attaque', '💉 Soins', '📦 On recule', '✅ Bien joué', '🌟 Burst prêt'] },
   'eldenring': { name: 'Elden Ring', emoji: '⚔️', phrases: ['💀 Boss ici', '🏃 Suivez-moi', '⚔️ On attaque', '📦 On recule', '✅ Bien joué', '🔥 Attention'] },
   'destiny2': { name: 'Destiny 2', emoji: '🚀', phrases: ['🎯 Ennemi repéré', '💉 Soins', '📦 On recule', '🏃 Suivez-moi', '✅ Bien joué', '⚡ Super prêt'] },
-  'lost ark': { name: 'Lost Ark', emoji: '🗺️', phrases: ['🏃 Suivez-moi', '⚔️ On attaque', '💉 Soins', '📦 On recule', '✅ Bien joué'] },
   'deadbydaylight': { name: 'Dead by Daylight', emoji: '🔦', phrases: ['🏃 Fuyez', '🔦 Killer ici', '🚪 Porte ouverte', '💉 Soins', '✅ Bien joué'] },
   'newworld': { name: 'New World', emoji: '🌍', phrases: ['🏃 Suivez-moi', '⚔️ On attaque', '💉 Soins', '📦 On recule', '✅ Bien joué'] },
   'tarkov': { name: 'Escape from Tarkov', emoji: '🎒', phrases: ['🎯 Contact', '📦 On loot', '🏃 Suivez-moi', '💉 Soins', '🔴 Danger'] },
@@ -67,14 +65,12 @@ const KNOWN_GAMES: Record<string, { name: string; emoji: string; phrases: string
   'worldofwarcraft': { name: 'World of Warcraft', emoji: '🐉', phrases: ['🏃 Suivez-moi', '⚔️ Pull', '💉 Soins', '📦 On recule', '✅ Bien joué', '💀 Mort'] },
   'wow': { name: 'World of Warcraft', emoji: '🐉', phrases: ['🏃 Suivez-moi', '⚔️ Pull', '💉 Soins', '📦 On recule', '✅ Bien joué', '💀 Mort'] },
   'ffxiv': { name: 'Final Fantasy XIV', emoji: '🌙', phrases: ['🏃 Suivez-moi', '⚔️ DPS', '💉 Soins', '🛡️ Tank', '✅ Bien joué'] },
-  'seadeals': { name: 'Sea of Thieves', emoji: '🏴‍☠️', phrases: ['⚓ À l\'abordage', '🏃 Suivez-moi', '🦅 Voile', '💉 Soins', '✅ Bien joué'] },
   'gtav': { name: 'GTA V', emoji: '🚗', phrases: ['🚗 En route', '🏃 Suivez-moi', '💰 Casse', '🚔 Police', '✅ Bien joué'] },
   'rdr2': { name: 'Red Dead Redemption 2', emoji: '🤠', phrases: ['🤠 En selle', '🏃 Suivez-moi', '🔫 Embuscade', '✅ Bien joué'] },
   'cyberpunk2077': { name: 'Cyberpunk 2077', emoji: '🌆', phrases: ['🏃 En mouvement', '🎯 Cible', '💉 Soins', '📦 On recule', '✅ Bien joué'] },
   'witcher3': { name: 'The Witcher 3', emoji: '🗡️', phrases: ['🏃 Suivez-moi', '⚔️ Monstre', '💉 Soins', '✅ Bien joué'] },
 }
 
-// ── Processus système à ignorer ───────────────────────────────────────────
 const SYSTEM_BLACKLIST = new Set([
   'explorer', 'svchost', 'system', 'idle', 'registry', 'smss', 'csrss',
   'wininit', 'winlogon', 'services', 'lsass', 'spoolsv', 'taskhost',
@@ -102,85 +98,47 @@ interface DetectedGame {
   processName: string
 }
 
-// ── Détection universelle ─────────────────────────────────────────────────
 function detectActiveGame(): DetectedGame | null {
   if (process.platform !== 'win32') return null
-
   try {
-    // Récupère tous les processus avec leurs titres de fenêtre et leur CPU
     const psOutput = execSync(
       'powershell -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Select-Object Name, MainWindowTitle, CPU | ConvertTo-Json"',
       { stdio: 'pipe', timeout: 5000, encoding: 'utf8' }
     ).trim()
-
     if (!psOutput) return null
-
     let processes: Array<{ Name: string; MainWindowTitle: string; CPU: number }> = []
     try {
       const parsed = JSON.parse(psOutput)
       processes = Array.isArray(parsed) ? parsed : [parsed]
-    } catch {
-      return null
-    }
-
-    // Filtre les processus système
+    } catch { return null }
     const filtered = processes.filter(p => {
       const name = (p.Name || '').toLowerCase().replace(/\.exe$/, '')
       return !SYSTEM_BLACKLIST.has(name) && p.MainWindowTitle && p.MainWindowTitle.trim().length > 0
     })
-
     if (filtered.length === 0) return null
-
-    // Trie par CPU décroissant — le jeu actif consomme le plus
     filtered.sort((a, b) => (b.CPU || 0) - (a.CPU || 0))
-
-    // Méthode 1 — vérifie si un processus connu est dans la liste
     for (const proc of filtered) {
       const procName = (proc.Name || '').toLowerCase().replace(/\.exe$/, '')
-      if (KNOWN_GAMES[procName]) {
-        return {
-          ...KNOWN_GAMES[procName],
-          processName: procName,
-        }
-      }
+      if (KNOWN_GAMES[procName]) return { ...KNOWN_GAMES[procName], processName: procName }
     }
-
-    // Méthode 2 — cherche par mots-clés dans le nom du processus
     for (const proc of filtered) {
       const procName = (proc.Name || '').toLowerCase().replace(/\.exe$/, '')
       for (const [key, game] of Object.entries(KNOWN_GAMES)) {
-        if (procName.includes(key) || key.includes(procName)) {
-          return { ...game, processName: procName }
-        }
+        if (procName.includes(key) || key.includes(procName)) return { ...game, processName: procName }
       }
     }
-
-    // Méthode 3 — détection universelle du processus le plus actif
-    // Prend le 1er processus non-système avec le plus de CPU
     const topProcess = filtered[0]
     if (topProcess) {
       const procName = (topProcess.Name || '').toLowerCase().replace(/\.exe$/, '')
       const windowTitle = topProcess.MainWindowTitle || procName
-
-      // Nettoie le titre pour l'affichage
       const cleanTitle = windowTitle
         .replace(/\s*-\s*(Steam|Epic Games|Ubisoft Connect|Battle\.net|GOG).*$/i, '')
         .replace(/\s*\[\s*\].*$/, '')
-        .trim()
-        .slice(0, 40) || procName
-
-      return {
-        name: cleanTitle,
-        emoji: '🎮',
-        phrases: DEFAULT_PHRASES,
-        processName: procName,
-      }
+        .trim().slice(0, 40) || procName
+      return { name: cleanTitle, emoji: '🎮', phrases: DEFAULT_PHRASES, processName: procName }
     }
-
     return null
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 function startGameDetection() {
@@ -188,7 +146,6 @@ function startGameDetection() {
   gameDetectionInterval = setInterval(() => {
     const detected = detectActiveGame()
     const key = detected ? detected.processName : null
-
     if (key !== lastDetectedGame) {
       lastDetectedGame = key
       if (mainWindow) {
@@ -223,22 +180,14 @@ ipcMain.handle('game:detect', () => {
 function setupAutoUpdater(win: BrowserWindow) {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.on('update-available', (info) => {
-    win.webContents.send('update:available', info.version)
-  })
-  autoUpdater.on('update-downloaded', () => {
-    win.webContents.send('update:downloaded')
-  })
-  autoUpdater.on('error', (err) => {
-    console.error('Auto-updater error:', err.message)
-  })
+  autoUpdater.on('update-available', (info) => { win.webContents.send('update:available', info.version) })
+  autoUpdater.on('update-downloaded', () => { win.webContents.send('update:downloaded') })
+  autoUpdater.on('error', (err) => { console.error('Auto-updater error:', err.message) })
   autoUpdater.checkForUpdates()
   setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000)
 }
 
-ipcMain.handle('update:install', () => {
-  autoUpdater.quitAndInstall()
-})
+ipcMain.handle('update:install', () => { autoUpdater.quitAndInstall() })
 
 function createOverlayWindow() {
   if (overlayWindow) { overlayWindow.show(); overlayWindow.focus(); return }
@@ -247,18 +196,12 @@ function createOverlayWindow() {
     width: 320, height: 200, x: width - 340, y: 20,
     frame: false, transparent: true, alwaysOnTop: true,
     skipTaskbar: true, resizable: true, hasShadow: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true, nodeIntegration: false, sandbox: false,
-    },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
   })
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
   overlayWindow.setVisibleOnAllWorkspaces(true)
-  if (isDev) {
-    overlayWindow.loadURL('http://localhost:5173/#/overlay')
-  } else {
-    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/overlay' })
-  }
+  if (isDev) { overlayWindow.loadURL('http://localhost:5173/#/overlay') }
+  else { overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/overlay' }) }
   overlayWindow.on('closed', () => { overlayWindow = null })
 }
 
@@ -285,25 +228,17 @@ function createSelectionWindow() {
   const maxY = Math.max(...displays.map(d => d.bounds.y + d.bounds.height))
   const totalWidth = maxX - minX
   const totalHeight = maxY - minY
-
   selectionWindow = new BrowserWindow({
     width: totalWidth, height: totalHeight, x: minX, y: minY,
     frame: false, transparent: true, alwaysOnTop: true,
-    skipTaskbar: true, resizable: false, movable: false,
-    enableLargerThanScreen: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true, nodeIntegration: false, sandbox: false,
-    },
+    skipTaskbar: true, resizable: false, movable: false, enableLargerThanScreen: true,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
   })
   selectionWindow.setAlwaysOnTop(true, 'screen-saver')
   selectionWindow.setVisibleOnAllWorkspaces(true)
   selectionWindow.setBounds({ x: minX, y: minY, width: totalWidth, height: totalHeight })
-  if (isDev) {
-    selectionWindow.loadURL('http://localhost:5173/#/ocr-select')
-  } else {
-    selectionWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/ocr-select' })
-  }
+  if (isDev) { selectionWindow.loadURL('http://localhost:5173/#/ocr-select') }
+  else { selectionWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/ocr-select' }) }
   selectionWindow.on('closed', () => { selectionWindow = null })
 }
 
@@ -319,27 +254,17 @@ ipcMain.handle('ocr:zoneSelected', async (_event, zone) => {
   closeSelectionWindow()
   if (mainWindow) mainWindow.hide()
   await new Promise(resolve => setTimeout(resolve, 500))
-  if (mainWindow) {
-    mainWindow.show()
-    mainWindow.webContents.send('ocr:capturing', true)
-  }
-  await startCapture(zone, (buffer) => {
-    if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
-  })
+  if (mainWindow) { mainWindow.show(); mainWindow.webContents.send('ocr:capturing', true) }
+  await startCapture(zone, (buffer) => { if (mainWindow) mainWindow.webContents.send('ocr:image', buffer) })
   return { success: true }
 })
 
 ipcMain.handle('ocr:start', async (_event, zone: { x: number; y: number; width: number; height: number }) => {
-  await startCapture(zone, (buffer) => {
-    if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
-  })
+  await startCapture(zone, (buffer) => { if (mainWindow) mainWindow.webContents.send('ocr:image', buffer) })
   return { success: true }
 })
 
-ipcMain.handle('ocr:stop', () => {
-  stopCapture()
-  return { success: true }
-})
+ipcMain.handle('ocr:stop', () => { stopCapture(); return { success: true } })
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -356,11 +281,11 @@ function createWindow(): BrowserWindow {
   Menu.setApplicationMenu(null)
   if (isDev) {
     win.loadURL('http://localhost:5173')
-    win.webContents.openDevTools({ mode: 'detach' })
+    win.webContents.openDevTools({ mode: 'detach' }) // ← dev seulement
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'))
   }
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => win.show()) // ← plus de DevTools en prod
   mainWindow = win
   return win
 }
@@ -389,9 +314,7 @@ ipcMain.handle('settings:getAll', () => store.store)
 ipcMain.handle('app:getVersion', () => app.getVersion())
 ipcMain.handle('app:getPlatform', () => process.platform)
 
-ipcMain.handle('shell:openExternal', (_event, url: string) => {
-  shell.openExternal(url)
-})
+ipcMain.handle('shell:openExternal', (_event, url: string) => { shell.openExternal(url) })
 
 ipcMain.handle('stt:start', async (_event, language: string) => {
   if (!mainWindow) throw new Error('Fenêtre non disponible')
@@ -408,9 +331,7 @@ ipcMain.handle('other-players:start', async (_event, language: string, targetLan
 })
 ipcMain.handle('other-players:stop', async () => { stopOtherPlayersPipeline(); return { success: true } })
 
-ipcMain.handle('virtual-audio:list-devices', async () => {
-  return listAudioDevices()
-})
+ipcMain.handle('virtual-audio:list-devices', async () => { return listAudioDevices() })
 ipcMain.handle('virtual-audio:play', async (_event, deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) => {
   const buffer = Buffer.from(pcmBuffer)
   const success = playAudioOnDevice(deviceId, buffer, sampleRate, channels)
