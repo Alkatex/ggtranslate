@@ -1,95 +1,128 @@
+import { Deepgram } from '@deepgram/sdk'
 import { BrowserWindow } from 'electron'
-import WebSocket from 'ws'
+
+type WSState = 'CONNECTED' | 'RECONNECTING' | 'DEAD'
 
 interface STTSession {
-  ws: WebSocket | null
+  connection: any
   isActive: boolean
   language: string
-  shouldReconnect: boolean
   reconnectAttempts: number
+  shouldReconnect: boolean
+  wsState: WSState
 }
 
 let currentSession: STTSession | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null
 let currentWin: BrowserWindow | null = null
 
-const WHISPER_URL = 'ws://localhost:8765'
-const MAX_RECONNECT_ATTEMPTS = 5
+const MAX_RECONNECT_ATTEMPTS = 7
+const BASE_RECONNECT_DELAY = 1000
 
-export async function startSTTSession(
-  win: BrowserWindow,
-  language: string
-): Promise<void> {
-  if (currentSession?.isActive) stopSTTSession()
-  currentWin = win
-  return connectWhisper(win, language, 0)
+function getReconnectDelay(attempts: number): number {
+  return Math.min(BASE_RECONNECT_DELAY * Math.pow(2, attempts), 30000)
 }
 
-function connectWhisper(
-  win: BrowserWindow,
-  language: string,
-  attempts: number
-): Promise<void> {
+export async function startSTTSession(win: BrowserWindow, language: string): Promise<void> {
+  if (currentSession?.isActive) stopSTTSession()
+  currentWin = win
+  return connectDeepgram(win, language, 0)
+}
+
+async function connectDeepgram(win: BrowserWindow, language: string, attempts: number): Promise<void> {
+  const apiKey = process.env.DEEPGRAM_API_KEY
+  if (!apiKey) throw new Error('DEEPGRAM_API_KEY manquante dans .env')
+
+  const deepgram = new Deepgram(apiKey)
+
+  const connection = deepgram.transcription.live({
+    language,
+    punctuate: true,
+    interim_results: true,
+    smart_format: true,
+    model: 'nova-2',
+    encoding: 'linear16',
+    sample_rate: 16000,
+    channels: 1,
+    endpointing: 300,
+    utterance_end_ms: 1000,
+    vad_events: true,
+  })
+
+  currentSession = {
+    connection,
+    isActive: false,
+    language,
+    reconnectAttempts: attempts,
+    shouldReconnect: true,
+    wsState: 'RECONNECTING',
+  }
+
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(WHISPER_URL)
-
-    currentSession = {
-      ws,
-      isActive: false,
-      language,
-      shouldReconnect: true,
-      reconnectAttempts: attempts,
-    }
-
-    ws.on('open', () => {
+    connection.addListener('open', () => {
       if (!currentSession) return
-      console.log('✅ Whisper WebSocket CONNECTÉ')
+      console.log('✅ Deepgram CONNECTED')
       currentSession.isActive = true
       currentSession.reconnectAttempts = 0
-
-      // ← Envoie la config langue
-      ws.send(JSON.stringify({ type: 'config', language }))
-
+      currentSession.wsState = 'CONNECTED'
       win.webContents.send('stt:state', 'listening')
+
+      if (keepAliveTimer) clearInterval(keepAliveTimer)
+      keepAliveTimer = setInterval(() => {
+        if (currentSession?.isActive && currentSession.connection) {
+          try {
+            const silence = Buffer.alloc(3200)
+            currentSession.connection.send(silence)
+          } catch {}
+        }
+      }, 8000)
+
       resolve()
     })
 
-    ws.on('message', (data: Buffer) => {
+    connection.addListener('transcriptReceived', (message: string) => {
       try {
-        const msg = JSON.parse(data.toString())
-        if (msg.type === 'transcript' && msg.text?.trim()) {
-          win.webContents.send('stt:transcript', {
-            text: msg.text,
-            isFinal: msg.isFinal,
-          })
+        const data = JSON.parse(message)
+        if (data.type === 'Results') {
+          const transcript = data?.channel?.alternatives?.[0]?.transcript
+          if (transcript && transcript.trim()) {
+            win.webContents.send('stt:transcript', {
+              text: transcript,
+              isFinal: data.is_final,
+            })
+          }
         }
       } catch (e) {
-        console.error('Erreur parsing transcript Whisper:', e)
+        console.error('Erreur parsing transcript:', e)
       }
     })
 
-    ws.on('error', (err: any) => {
-      console.error('❌ Whisper WebSocket ERROR:', err.message)
+    connection.addListener('error', (err: any) => {
+      console.error('❌ Deepgram ERROR:', err)
       if (!currentSession) return
+      currentSession.wsState = 'RECONNECTING'
+      win.webContents.send('stt:state', 'processing')
 
       if (currentSession.shouldReconnect && attempts < MAX_RECONNECT_ATTEMPTS) {
-        const delay = Math.min(1000 * Math.pow(2, attempts), 10000)
-        console.log(`🔄 Reconnexion Whisper dans ${delay}ms...`)
-        win.webContents.send('stt:error', `Reconnexion Whisper dans ${Math.round(delay / 1000)}s...`)
+        const delay = getReconnectDelay(attempts)
+        win.webContents.send('stt:error', `Reconnexion dans ${Math.round(delay / 1000)}s...`)
         currentSession = null
         reconnectTimer = setTimeout(() => {
-          connectWhisper(win, language, attempts + 1).catch(console.error)
+          connectDeepgram(win, language, attempts + 1).catch(console.error)
         }, delay)
       } else {
-        win.webContents.send('stt:error', '⚙️ Serveur Whisper non disponible — lance whisper_server.py')
+        if (currentSession) currentSession.wsState = 'DEAD'
+        win.webContents.send('stt:error', 'Connexion Deepgram impossible — redémarre la session')
         win.webContents.send('stt:state', 'error')
         currentSession = null
         reject(err)
       }
     })
 
-    ws.on('close', () => {
-      console.log('🔌 Whisper WebSocket FERMÉ')
+    connection.addListener('close', () => {
+      console.log('🔌 Deepgram CLOSE')
+      if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null }
       if (!currentSession) return
 
       const wasActive = currentSession.isActive
@@ -98,26 +131,27 @@ function connectWhisper(
       const shouldReconnect = currentSession.shouldReconnect
 
       currentSession.isActive = false
-      currentSession = null
+      currentSession.wsState = 'RECONNECTING'
 
       if (shouldReconnect && wasActive && att < MAX_RECONNECT_ATTEMPTS) {
-        const delay = Math.min(1000 * Math.pow(2, att), 10000)
-        console.log(`🔄 Reconnexion après close dans ${delay}ms...`)
+        const delay = getReconnectDelay(att)
         win.webContents.send('stt:state', 'processing')
+        currentSession = null
         reconnectTimer = setTimeout(() => {
-          connectWhisper(win, lang, att + 1).catch(console.error)
+          connectDeepgram(win, lang, att + 1).catch(console.error)
         }, delay)
       } else {
         if (wasActive) win.webContents.send('stt:state', 'inactive')
+        currentSession = null
       }
     })
   })
 }
 
 export function sendAudioChunk(chunk: Buffer): void {
-  if (currentSession?.isActive && currentSession.ws?.readyState === WebSocket.OPEN) {
+  if (currentSession?.isActive && currentSession.wsState === 'CONNECTED' && currentSession.connection) {
     try {
-      currentSession.ws.send(chunk)
+      currentSession.connection.send(chunk)
     } catch (err) {
       console.error('❌ sendAudioChunk error:', err)
     }
@@ -125,18 +159,15 @@ export function sendAudioChunk(chunk: Buffer): void {
 }
 
 export function stopSTTSession(): void {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer)
-    reconnectTimer = null
-  }
-
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+  if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null }
   if (currentSession) {
     currentSession.shouldReconnect = false
     currentSession.isActive = false
-    try { currentSession.ws?.close() } catch {}
+    currentSession.wsState = 'DEAD'
+    try { currentSession.connection?.finish() } catch {}
     currentSession = null
   }
-
   currentWin = null
-  console.log('🛑 Whisper STT Session arrêtée')
+  console.log('🛑 STT Session arrêtée proprement')
 }
