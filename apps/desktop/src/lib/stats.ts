@@ -9,7 +9,7 @@ export async function updateStats(userId: string, opts: {
   newSession?: boolean
 }) {
   try {
-    // Charger les stats actuelles
+    // ─── Charger les stats actuelles depuis user_stats ────────────────────────
     const { data: current } = await supabase
       .from('user_stats')
       .select('*')
@@ -19,7 +19,7 @@ export async function updateStats(userId: string, opts: {
     const topLanguages: { code: string; flag: string; name: string; count: number }[] = current?.top_languages || []
     const topGames: { name: string; emoji: string; count: number }[] = current?.top_games || []
 
-    // Mettre à jour les langues
+    // ─── Mettre à jour les langues ────────────────────────────────────────────
     if (opts.targetLang) {
       const existing = topLanguages.find(l => l.code === opts.targetLang!.code)
       if (existing) {
@@ -30,7 +30,7 @@ export async function updateStats(userId: string, opts: {
       topLanguages.sort((a, b) => b.count - a.count)
     }
 
-    // Mettre à jour les jeux
+    // ─── Mettre à jour les jeux ───────────────────────────────────────────────
     if (opts.game) {
       const existing = topGames.find(g => g.name === opts.game!.name)
       if (existing) {
@@ -41,6 +41,7 @@ export async function updateStats(userId: string, opts: {
       topGames.sort((a, b) => b.count - a.count)
     }
 
+    // ─── Mise à jour user_stats (stats totales à vie) ─────────────────────────
     await supabase.from('user_stats').upsert({
       id: userId,
       total_phrases: (current?.total_phrases || 0) + (opts.phrases || 0),
@@ -51,14 +52,23 @@ export async function updateStats(userId: string, opts: {
       updated_at: new Date().toISOString(),
     })
 
-    // Mettre à jour aussi profiles
-    if (opts.phrases) {
-      await supabase.from('profiles').upsert({
-        id: userId,
-        total_phrases: (current?.total_phrases || 0) + opts.phrases,
-        total_sessions: (current?.total_sessions || 0) + (opts.newSession ? 1 : 0),
-      })
+    // ─── FIX: Sync minutes_used_today dans profiles avec UPDATE ──────────────
+    // UPDATE au lieu de upsert pour ne pas écraser les autres colonnes
+    if (opts.minutes && opts.minutes > 0) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('minutes_used_today')
+        .eq('id', userId)
+        .single()
+
+      const currentMinutes = profileData?.minutes_used_today ?? 0
+
+      await supabase
+        .from('profiles')
+        .update({ minutes_used_today: currentMinutes + opts.minutes })
+        .eq('id', userId)
     }
+
   } catch (err) {
     console.error('[Stats] Erreur mise à jour:', err)
   }

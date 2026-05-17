@@ -12,6 +12,7 @@ interface OtherPlayersPipelineConfig {
 let currentConfig: OtherPlayersPipelineConfig | null = null
 let isRunning = false
 let deepgramConnection: any = null
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null
 
 export async function startOtherPlayersPipeline(
   config: OtherPlayersPipelineConfig
@@ -32,6 +33,8 @@ export async function startOtherPlayersPipeline(
   }
 
   const deepgram = new Deepgram(apiKey)
+
+  // ─── FIX: sample_rate 16000 pour correspondre à la capture audio ──────────
   deepgramConnection = deepgram.transcription.live({
     language: config.language,
     punctuate: true,
@@ -39,7 +42,7 @@ export async function startOtherPlayersPipeline(
     smart_format: true,
     model: 'nova-2',
     encoding: 'linear16',
-    sample_rate: 48000,
+    sample_rate: 16000,
     channels: 1,
     endpointing: 200,
     utterance_end_ms: 1000,
@@ -47,18 +50,38 @@ export async function startOtherPlayersPipeline(
   })
 
   deepgramConnection.addListener('open', () => {
+    if (!isRunning) return
     console.log('✅ Deepgram Other Players connecté')
     config.win.webContents.send('other-players:state', 'listening')
 
+    // ─── FIX: Keepalive toutes les 8s pour éviter déconnexion ────────────────
+    if (keepAliveTimer) clearInterval(keepAliveTimer)
+    keepAliveTimer = setInterval(() => {
+      if (isRunning && deepgramConnection) {
+        try {
+          const silence = Buffer.alloc(3200)
+          deepgramConnection.send(silence)
+        } catch {}
+      }
+    }, 8000)
+
     const success = startOtherPlayersCapture(config.win, (chunk: Buffer) => {
       if (!isRunning || !deepgramConnection) return
-      deepgramConnection.send(chunk)
+      try {
+        deepgramConnection.send(chunk)
+      } catch (err) {
+        console.error('Erreur envoi chunk Other Players:', err)
+      }
     })
 
     if (!success) {
       config.win.webContents.send('other-players:state', 'error')
-      config.win.webContents.send('other-players:error', 'Impossible de démarrer la capture audio')
+      config.win.webContents.send('other-players:error', 'Impossible de démarrer la capture audio système — vérifie que VB-Cable est installé')
+      // ─── FIX: Nettoyage complet si capture échoue ─────────────────────────
       isRunning = false
+      if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null }
+      try { deepgramConnection?.finish() } catch {}
+      deepgramConnection = null
     }
   })
 
@@ -80,28 +103,51 @@ export async function startOtherPlayersPipeline(
     }
   })
 
+  // ─── FIX: Nettoyage complet sur erreur ────────────────────────────────────
   deepgramConnection.addListener('error', (err: any) => {
-    console.error('Erreur Deepgram Other Players:', err)
+    console.error('❌ Erreur Deepgram Other Players:', err)
+    if (!isRunning) return
+
     config.win.webContents.send('other-players:state', 'error')
-    config.win.webContents.send('other-players:error', 'Erreur connexion Deepgram')
+    config.win.webContents.send('other-players:error', 'Erreur connexion Deepgram Other Players')
+
+    // Nettoyage complet
     isRunning = false
+    if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null }
+    stopOtherPlayersCapture()
+    try { deepgramConnection?.finish() } catch {}
+    deepgramConnection = null
+    currentConfig = null
   })
 
   deepgramConnection.addListener('close', () => {
     console.log('🔌 Deepgram Other Players déconnecté')
+    if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null }
     if (isRunning) {
       config.win.webContents.send('other-players:state', 'inactive')
+      isRunning = false
     }
   })
 }
 
 export function stopOtherPlayersPipeline(): void {
-  if (!isRunning) return
+  if (!isRunning && !deepgramConnection) return
+
+  console.log('🔌 Arrêt pipeline Other Players')
   isRunning = false
+
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer)
+    keepAliveTimer = null
+  }
+
   stopOtherPlayersCapture()
-  deepgramConnection?.finish()
+
+  try { deepgramConnection?.finish() } catch {}
   deepgramConnection = null
+
   currentConfig?.win.webContents.send('other-players:state', 'inactive')
   currentConfig = null
-  console.log('🔌 Pipeline Other Players arrêté')
+
+  console.log('✅ Pipeline Other Players arrêté proprement')
 }

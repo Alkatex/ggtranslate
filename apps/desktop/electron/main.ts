@@ -239,7 +239,11 @@ function createSelectionWindow() {
   selectionWindow.setBounds({ x: minX, y: minY, width: totalWidth, height: totalHeight })
   if (isDev) { selectionWindow.loadURL('http://localhost:5173/#/ocr-select') }
   else { selectionWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/ocr-select' }) }
-  selectionWindow.on('closed', () => { selectionWindow = null })
+  selectionWindow.on('closed', () => {
+    selectionWindow = null
+    // ─── FIX: Si fermée sans sélection → réaffiche la fenêtre principale ────
+    if (mainWindow) mainWindow.show()
+  })
 }
 
 function closeSelectionWindow() {
@@ -247,15 +251,35 @@ function closeSelectionWindow() {
 }
 
 ipcMain.handle('ocr:init', async () => { await initOCR(); return { success: true } })
-ipcMain.handle('ocr:openSelection', () => { createSelectionWindow(); return { success: true } })
-ipcMain.handle('ocr:closeSelection', () => { closeSelectionWindow(); return { success: true } })
 
+// ─── FIX: Cache la fenêtre principale AVANT d'ouvrir la sélection ────────────
+ipcMain.handle('ocr:openSelection', async () => {
+  if (mainWindow) {
+    mainWindow.hide()
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
+  createSelectionWindow()
+  return { success: true }
+})
+
+// ─── FIX: Réaffiche la fenêtre principale si annulation ──────────────────────
+ipcMain.handle('ocr:closeSelection', () => {
+  closeSelectionWindow()
+  if (mainWindow) mainWindow.show()
+  return { success: true }
+})
+
+// ─── FIX: Plus besoin de hide/show ici — déjà géré dans openSelection ────────
 ipcMain.handle('ocr:zoneSelected', async (_event, zone) => {
   closeSelectionWindow()
-  if (mainWindow) mainWindow.hide()
-  await new Promise(resolve => setTimeout(resolve, 500))
-  if (mainWindow) { mainWindow.show(); mainWindow.webContents.send('ocr:capturing', true) }
-  await startCapture(zone, (buffer) => { if (mainWindow) mainWindow.webContents.send('ocr:image', buffer) })
+  await new Promise(resolve => setTimeout(resolve, 300))
+  if (mainWindow) {
+    mainWindow.show()
+    mainWindow.webContents.send('ocr:capturing', true)
+  }
+  await startCapture(zone, (buffer) => {
+    if (mainWindow) mainWindow.webContents.send('ocr:image', buffer)
+  })
   return { success: true }
 })
 
@@ -281,11 +305,11 @@ function createWindow(): BrowserWindow {
   Menu.setApplicationMenu(null)
   if (isDev) {
     win.loadURL('http://localhost:5173')
-    win.webContents.openDevTools({ mode: 'detach' }) // ← dev seulement
+    win.webContents.openDevTools({ mode: 'detach' })
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'))
   }
-  win.once('ready-to-show', () => win.show()) // ← plus de DevTools en prod
+  win.once('ready-to-show', () => win.show())
   mainWindow = win
   return win
 }

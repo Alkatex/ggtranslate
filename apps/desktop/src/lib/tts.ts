@@ -205,7 +205,7 @@ async function playAudio(
     })
   }
 
-  // ─── Avec effets DSP dans Worker ─────────────────────────────────────────
+  // ─── Avec effets DSP dans Worker ──────────────────────────────────────────
   const audioCtx = new AudioContext({ sampleRate: 44100 })
 
   if (headsetDeviceId && 'setSinkId' in audioCtx) {
@@ -221,8 +221,19 @@ async function playAudio(
   // Loudness normalization
   audioBuffer = normalizeLoudness(audioBuffer)
 
-  // DSP dans Web Worker — libère le thread UI
-  audioBuffer = await applyVoiceEffectWorker(audioBuffer, effectId)
+  // ─── FIX: timeout 4s + fallback sans effet si Worker échoue ──────────────
+  try {
+    audioBuffer = await Promise.race([
+      applyVoiceEffectWorker(audioBuffer, effectId),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('DSP Worker timeout après 4s')), 4000)
+      ),
+    ])
+    console.log('✅ Effet DSP appliqué:', effectId)
+  } catch (err) {
+    console.warn('⚠️ DSP Worker failed — lecture sans effet:', err)
+    // Continue avec audioBuffer non modifié — on entend quand même la voix
+  }
 
   // Silence padding
   audioBuffer = await addSilencePadding(audioBuffer, 0.5)

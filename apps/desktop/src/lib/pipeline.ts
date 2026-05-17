@@ -160,11 +160,15 @@ export class TranslationPipeline {
       config.onStateChange('listening')
 
       const outputDevice = config.virtualDeviceId || config.headsetDeviceId
+
+      // ← FIX: utilise this.config.voiceEffect pour avoir l'effet à jour
+      const currentEffect = this.config?.voiceEffect || 'normal'
+
       speakTranslation(
         translated,
         outputDevice,
         config.targetLang,
-        config.voiceEffect || 'normal'
+        currentEffect
       ).catch(err => {
         errorBus.emit({
           type: 'TTS_ERROR',
@@ -192,6 +196,14 @@ export class TranslationPipeline {
 
   private isSessionActive(sessionId: number): boolean {
     return this.isRunning && this.sessionId === sessionId
+  }
+
+  // ─── FIX: Met à jour l'effet vocal mid-session ────────────────────────────
+  setVoiceEffect(effectId: string) {
+    if (this.config) {
+      this.config.voiceEffect = effectId
+      console.log('🎛️ Voice effect mis à jour:', effectId)
+    }
   }
 
   stop() {

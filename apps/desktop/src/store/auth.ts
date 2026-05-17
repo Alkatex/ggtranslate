@@ -115,7 +115,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         secondsRemaining = -1
       } else {
         const limits = PLAN_LIMITS[plan]
-        const secondsUsed = profile?.minutes_used_today ? profile.minutes_used_today * 60 : 0
+        // ─── FIX: Source unique — profiles.minutes_used_today ─────────────────
+        const minutesUsedToday = profile?.minutes_used_today ?? 0
+        const secondsUsed = minutesUsedToday * 60
         secondsRemaining = Math.max(0, limits.secondsPerDay - secondsUsed)
       }
 
@@ -131,11 +133,17 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (plan === 'pro') return
 
     const newRemaining = Math.max(0, secondsRemaining - seconds)
-    set({ secondsRemaining: newRemaining })
 
-    const newMinutesUsed = profile.minutes_used_today + Math.ceil(seconds / 60)
-    await supabase.from('profiles')
-      .update({ minutes_used_today: newMinutesUsed })
+    // ─── FIX: Met à jour profile dans le store aussi ──────────────────────────
+    const newMinutesUsedToday = profile.minutes_used_today + Math.ceil(seconds / 60)
+    const updatedProfile = { ...profile, minutes_used_today: newMinutesUsedToday }
+
+    set({ secondsRemaining: newRemaining, profile: updatedProfile })
+
+    // ─── Sync DB — update seulement les colonnes nécessaires ──────────────────
+    await supabase
+      .from('profiles')
+      .update({ minutes_used_today: newMinutesUsedToday })
       .eq('id', user.id)
   },
 

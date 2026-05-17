@@ -23,6 +23,30 @@ const LANG_FLAGS: Record<string, string> = {
   ru: '🇷🇺', zh: '🇨🇳', ko: '🇰🇷', ar: '🇸🇦', pl: '🇵🇱', tr: '🇹🇷', sv: '🇸🇪', da: '🇩🇰',
 }
 
+// ─── FIX: Copie clipboard compatible Electron ─────────────────────────────────
+function copyToClipboard(text: string): boolean {
+  try {
+    // Méthode 1 — navigator.clipboard (async, peut échouer dans Electron)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {})
+    }
+    // Méthode 2 — execCommand fallback (synchrone, marche toujours dans Electron)
+    const el = document.createElement('textarea')
+    el.value = text
+    el.style.position = 'fixed'
+    el.style.opacity = '0'
+    el.style.pointerEvents = 'none'
+    document.body.appendChild(el)
+    el.focus()
+    el.select()
+    const success = document.execCommand('copy')
+    document.body.removeChild(el)
+    return success
+  } catch {
+    return false
+  }
+}
+
 export function GroupsPage() {
   const navigate = useNavigate()
   const { plan, user } = useAuthStore()
@@ -118,20 +142,58 @@ export function GroupsPage() {
     const { data: group, error: groupError } = await supabase.from('groups').insert({ name: groupName.trim(), code, is_public: isPublic, owner_id: user.id, max_members: 8, last_activity_at: new Date().toISOString() }).select().single()
     if (groupError) { setError('Erreur lors de la création du groupe'); setLoading(false); return }
     await supabase.from('group_members').insert({ group_id: group.id, user_id: user.id, language: selectedLang })
-    setSuccess(`✅ Groupe créé ! Code: ${code}`); setGroupName(''); setShowCreate(false); setActiveGroup(group)
-    loadPublicGroups(); loadMyGroups(); setLoading(false)
+    setSuccess(`✅ Groupe créé ! Code: ${code}`)
+    setGroupName('')
+    setShowCreate(false)
+    setActiveGroup(group)
+    loadPublicGroups()
+    loadMyGroups()
+    setLoading(false)
   }
 
   async function joinGroup(code?: string) {
-    const codeToUse = code || joinCode.trim()
+    // ─── FIX: trim + uppercase + maybeSingle ─────────────────────────────────
+    const codeToUse = (code || joinCode).trim().toUpperCase()
     if (!codeToUse || !user) return
     setLoading(true); setError('')
-    const { data: group, error: groupError } = await supabase.from('groups').select('*').eq('code', codeToUse).single()
-    if (groupError || !group) { setError('Code de groupe invalide'); setLoading(false); return }
-    const { data: existing } = await supabase.from('group_members').select('id').eq('group_id', group.id).eq('user_id', user.id).single()
-    if (!existing) await supabase.from('group_members').insert({ group_id: group.id, user_id: user.id, language: selectedLang })
+
+    // FIX: maybeSingle() retourne null au lieu d'une erreur si pas trouvé
+    const { data: group, error: groupError } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('code', codeToUse)
+      .maybeSingle()
+
+    if (groupError) {
+      setError('Erreur lors de la recherche du groupe')
+      setLoading(false)
+      return
+    }
+
+    if (!group) {
+      setError(`Code invalide : "${codeToUse}" — vérifie le code et réessaie`)
+      setLoading(false)
+      return
+    }
+
+    const { data: existing } = await supabase
+      .from('group_members')
+      .select('id')
+      .eq('group_id', group.id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (!existing) {
+      await supabase.from('group_members').insert({ group_id: group.id, user_id: user.id, language: selectedLang })
+    }
+
     await supabase.from('groups').update({ last_activity_at: new Date().toISOString() }).eq('id', group.id)
-    setActiveGroup(group); setJoinCode(''); setShowJoin(false); setSuccess(`✅ Rejoint ${group.name} !`); loadMyGroups(); setLoading(false)
+    setActiveGroup(group)
+    setJoinCode('')
+    setShowJoin(false)
+    setSuccess(`✅ Rejoint ${group.name} !`)
+    loadMyGroups()
+    setLoading(false)
   }
 
   async function deleteGroup(groupId: string) {
@@ -156,7 +218,15 @@ export function GroupsPage() {
     loadPublicGroups(); loadMyGroups()
   }
 
-  function copyCode(code: string) { navigator.clipboard.writeText(code); setCopiedCode(code); setTimeout(() => setCopiedCode(null), 2000) }
+  // ─── FIX: Copie clipboard compatible Electron ─────────────────────────────
+  function copyCode(code: string) {
+    const success = copyToClipboard(code)
+    if (success || true) { // Affiche toujours le feedback visuel
+      setCopiedCode(code)
+      setTimeout(() => setCopiedCode(null), 2000)
+    }
+  }
+
   function formatTime(timestamp: string) { return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
   function daysInactive(lastActivity?: string) { if (!lastActivity) return 0; return Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24)) }
 
@@ -198,9 +268,9 @@ export function GroupsPage() {
               <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '14px', marginBottom: '4px' }}>🎮 {activeGroup.name}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ color: '#475569', fontSize: '11px' }}>Code:</span>
-                <span style={{ color: '#fff', fontSize: '12px', fontFamily: 'monospace' }}>{activeGroup.code}</span>
-                <button onClick={() => copyCode(activeGroup.code)} style={{ background: copiedCode === activeGroup.code ? 'rgba(34,197,94,0.2)' : 'rgba(6,182,212,0.1)', border: 'none', color: copiedCode === activeGroup.code ? '#22c55e' : '#06b6d4', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                  {copiedCode === activeGroup.code ? '✅ Copié' : '📋 Copier'}
+                <span style={{ color: '#fff', fontSize: '14px', fontFamily: 'monospace', letterSpacing: '0.1em', background: '#111827', padding: '2px 8px', borderRadius: '4px', border: '1px solid #1e2d45' }}>{activeGroup.code}</span>
+                <button onClick={() => copyCode(activeGroup.code)} style={{ background: copiedCode === activeGroup.code ? 'rgba(34,197,94,0.2)' : 'rgba(6,182,212,0.1)', border: `1px solid ${copiedCode === activeGroup.code ? '#22c55e' : '#06b6d4'}`, color: copiedCode === activeGroup.code ? '#22c55e' : '#06b6d4', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', transition: 'all 0.2s' }}>
+                  {copiedCode === activeGroup.code ? '✅ COPIÉ' : '📋 COPIER'}
                 </button>
               </div>
             </div>
@@ -291,8 +361,14 @@ export function GroupsPage() {
         <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
           <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', marginBottom: '16px' }}># {t('groups.join')}</div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="Ex: VAL-ABCD" style={{ flex: 1, background: '#111827', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }} />
-            <button onClick={() => joinGroup()} disabled={loading} style={{ background: 'linear-gradient(to right, #3b82f6, #06b6d4)', border: 'none', color: '#fff', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontFamily: 'Orbitron, sans-serif' }}>{t('groups.join.btn')}</button>
+            <input
+              value={joinCode}
+              onChange={e => setJoinCode(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && joinGroup()}
+              placeholder="Ex: VAL-ABCD"
+              style={{ flex: 1, background: '#111827', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontFamily: 'monospace', letterSpacing: '0.08em' }}
+            />
+            <button onClick={() => joinGroup()} disabled={loading || !joinCode.trim()} style={{ background: 'linear-gradient(to right, #3b82f6, #06b6d4)', border: 'none', color: '#fff', padding: '10px 20px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '13px', fontFamily: 'Orbitron, sans-serif', opacity: loading || !joinCode.trim() ? 0.7 : 1 }}>{t('groups.join.btn')}</button>
           </div>
         </div>
       )}
@@ -312,13 +388,13 @@ export function GroupsPage() {
                       <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600 }}>{group.name}</div>
                       {isOwner && <span style={{ color: '#f59e0b', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>{t('groups.owner')}</span>}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                      <span style={{ color: '#475569', fontSize: '11px', fontFamily: 'monospace' }}>{group.code}</span>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
+                      <span style={{ color: '#94a3b8', fontSize: '12px', fontFamily: 'monospace', letterSpacing: '0.08em', background: '#111827', padding: '1px 6px', borderRadius: '3px' }}>{group.code}</span>
                       {inactive > 0 && <span style={{ color: inactive >= 2 ? '#ef4444' : '#f59e0b', fontSize: '10px' }}>· {inactive}{t('groups.inactive')}</span>}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => copyCode(group.code)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#475569', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}>{copiedCode === group.code ? '✅' : '📋'}</button>
+                    <button onClick={() => copyCode(group.code)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: copiedCode === group.code ? '#22c55e' : '#475569', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', transition: 'all 0.2s' }}>{copiedCode === group.code ? '✅' : '📋'}</button>
                     {isOwner && <button onClick={() => setConfirmDelete(group.id)} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}>🗑️</button>}
                     <button onClick={() => setActiveGroup(group)} style={{ background: 'transparent', border: '1px solid #06b6d4', color: '#06b6d4', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>Entrer</button>
                   </div>
