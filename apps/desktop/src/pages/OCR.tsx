@@ -4,6 +4,8 @@ import { translateText } from '../lib/translation'
 import { useAuthStore } from '../store/auth'
 import { getAvailableLanguages } from '../lib/languages'
 import Tesseract from 'tesseract.js'
+import { motion, AnimatePresence } from 'motion/react'
+import tokens from '../styles/tokens'
 
 interface OCRResult {
   id: number
@@ -35,7 +37,6 @@ export function OCRPage() {
   useEffect(() => { sourceLangRef.current = sourceLang }, [sourceLang])
   useEffect(() => { targetLangRef.current = targetLang }, [targetLang])
 
-  // Charge les langues OCR sauvegardées
   useEffect(() => {
     async function loadOCRLangs() {
       const savedSource = await window.electron.settings.get('ocrSourceLang') as string
@@ -47,7 +48,6 @@ export function OCRPage() {
     loadOCRLangs()
   }, [])
 
-  // Sauvegarde quand les langues changent
   useEffect(() => {
     if (!ocrLangsLoadedRef.current) return
     window.electron.settings.set('ocrSourceLang', sourceLang)
@@ -65,7 +65,6 @@ export function OCRPage() {
     })
 
     window.electron.ocr.onImage(async (buffer: any) => {
-      console.log('[OCR] Image reçue !', buffer?.length)
       if (isProcessingRef.current) return
       isProcessingRef.current = true
       try {
@@ -82,8 +81,6 @@ export function OCRPage() {
           .replace(/[^\w\s\u00C0-\u024F\u0400-\u04FF\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF.,!?':;«»()[\]{}\-–—/]/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
-
-        console.log('[OCR] Texte détecté:', clean)
 
         if (!clean || clean.length < 3 || clean === lastTextRef.current) {
           setStatus('● Capture active')
@@ -119,7 +116,7 @@ export function OCRPage() {
 
   async function openSelection() {
     await window.electron.ocr.openSelection()
-    setStatus('Sélectionne une zone sur l\'écran...')
+    setStatus("Sélectionne une zone sur l'écran...")
   }
 
   async function stopCapture() {
@@ -129,99 +126,167 @@ export function OCRPage() {
     setStatus('Prêt — sélectionne une zone')
   }
 
+  const isProcessing = status.includes('⟳')
+
   return (
-    <div style={{
-      position: 'relative', zIndex: 1,
-      minHeight: '100vh', padding: '0 24px 24px',
-      maxWidth: '800px', margin: '0 auto',
-      userSelect: 'none',
-    }}>
+    <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', padding: '0 24px 24px', maxWidth: '800px', margin: '0 auto', userSelect: 'none' }}>
       <style>{`* { -webkit-user-select: none !important; user-select: none !important; }`}</style>
 
       {/* HEADER */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #1e2d45', marginBottom: '24px' }}>
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: `1px solid ${tokens.colors.border}`, marginBottom: '24px' }}
+      >
         <div>
-          <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '18px', fontWeight: 700, letterSpacing: '0.1em' }}>GG TRANSLATE</div>
-          <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.15em', marginTop: '2px' }}>CAPTURE OCR</div>
+          <div style={{ fontFamily: tokens.fonts.display, color: tokens.colors.cyan, fontSize: '18px', fontWeight: tokens.fontWeights.bold, letterSpacing: tokens.letterSpacing.wide }}>GG TRANSLATE</div>
+          <div style={{ color: tokens.colors.dim, fontSize: '10px', letterSpacing: tokens.letterSpacing.widest, marginTop: '2px' }}>CAPTURE OCR</div>
         </div>
-        <button onClick={() => navigate('/translate')} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '13px' }}>← Traducteur</button>
-      </div>
+        <button
+          onClick={() => navigate('/translate')}
+          style={{ background: 'transparent', border: 'none', color: tokens.colors.muted, cursor: 'pointer', fontSize: '13px', transition: tokens.transitions.normal }}
+          onMouseEnter={e => e.currentTarget.style.color = tokens.colors.text}
+          onMouseLeave={e => e.currentTarget.style.color = tokens.colors.muted}
+        >← Traducteur</button>
+      </motion.div>
 
       {/* LANGUES */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, delay: 0.08 }}
+        style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}
+      >
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#06b6d4', fontSize: '11px', letterSpacing: '0.1em', marginBottom: '8px', fontFamily: 'Orbitron, sans-serif' }}>LANGUE SOURCE</div>
-          <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} style={{ width: '100%', background: '#0d1424', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}>
+          <div style={{ color: tokens.colors.cyan, fontSize: '11px', letterSpacing: tokens.letterSpacing.wide, marginBottom: '8px', fontFamily: tokens.fonts.display }}>LANGUE SOURCE</div>
+          <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} style={{ width: '100%', background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, color: tokens.colors.text, padding: '10px 14px', borderRadius: tokens.radius.lg, fontSize: '14px', cursor: 'pointer', outline: 'none' }}>
             {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.name}</option>)}
           </select>
         </div>
-        <div style={{ marginTop: '24px', color: '#475569', fontSize: '18px' }}>→</div>
+        <div style={{ marginTop: '24px', color: tokens.colors.dim, fontSize: '18px' }}>→</div>
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#06b6d4', fontSize: '11px', letterSpacing: '0.1em', marginBottom: '8px', fontFamily: 'Orbitron, sans-serif' }}>LANGUE CIBLE</div>
-          <select value={targetLang} onChange={e => setTargetLang(e.target.value)} style={{ width: '100%', background: '#0d1424', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}>
+          <div style={{ color: tokens.colors.cyan, fontSize: '11px', letterSpacing: tokens.letterSpacing.wide, marginBottom: '8px', fontFamily: tokens.fonts.display }}>LANGUE CIBLE</div>
+          <select value={targetLang} onChange={e => setTargetLang(e.target.value)} style={{ width: '100%', background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, color: tokens.colors.text, padding: '10px 14px', borderRadius: tokens.radius.lg, fontSize: '14px', cursor: 'pointer', outline: 'none' }}>
             {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.name}</option>)}
           </select>
         </div>
-      </div>
+      </motion.div>
 
       {/* CONTRÔLES */}
-      <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, delay: 0.14 }}
+        style={{ background: tokens.colors.bg2, border: `1px solid ${isCapturing ? tokens.colors.green + '55' : tokens.colors.border}`, borderRadius: tokens.radius.xl, padding: '20px', marginBottom: '20px', transition: 'border-color 0.3s' }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em' }}>📷 ZONE DE CAPTURE</div>
-          <div style={{ color: isCapturing ? '#22c55e' : '#475569', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>{status}</div>
+          <div style={{ fontFamily: tokens.fonts.display, fontSize: '11px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide }}>📷 ZONE DE CAPTURE</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {isCapturing && (
+              <motion.div
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                style={{ width: '6px', height: '6px', borderRadius: '50%', background: isProcessing ? tokens.colors.blue : tokens.colors.green }}
+              />
+            )}
+            <div style={{ color: isCapturing ? (isProcessing ? tokens.colors.blue : tokens.colors.green) : tokens.colors.dim, fontSize: '11px', fontFamily: tokens.fonts.display }}>
+              {status}
+            </div>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          {!isCapturing ? (
-            <button onClick={openSelection} style={{
-              flex: 1,
-              background: 'linear-gradient(to right, #3b82f6, #06b6d4)',
-              border: 'none', color: '#fff', padding: '12px', borderRadius: '8px',
-              cursor: 'pointer', fontSize: '13px', fontFamily: 'Orbitron, sans-serif',
-            }}>
-              ⊹ Sélectionner une zone
-            </button>
-          ) : (
-            <button onClick={stopCapture} style={{
-              flex: 1,
-              background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444',
-              color: '#ef4444', padding: '12px', borderRadius: '8px',
-              cursor: 'pointer', fontSize: '13px', fontFamily: 'Orbitron, sans-serif',
-            }}>⏹ Arrêter la capture</button>
-          )}
-          <button onClick={() => setResults([])} style={{
-            background: 'transparent', border: '1px solid #1e2d45',
-            color: '#475569', padding: '12px 16px', borderRadius: '8px',
-            cursor: 'pointer', fontSize: '12px',
-          }}>🗑️</button>
+          <AnimatePresence mode="wait">
+            {!isCapturing ? (
+              <motion.button
+                key="start"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={openSelection}
+                style={{ flex: 1, background: tokens.gradients.primaryR, border: 'none', color: tokens.colors.white, padding: '12px', borderRadius: tokens.radius.md, cursor: 'pointer', fontSize: '13px', fontFamily: tokens.fonts.display }}
+              >
+                ⊹ Sélectionner une zone
+              </motion.button>
+            ) : (
+              <motion.button
+                key="stop"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={stopCapture}
+                style={{ flex: 1, background: tokens.alpha.redDim, border: `1px solid ${tokens.colors.red}`, color: tokens.colors.red, padding: '12px', borderRadius: tokens.radius.md, cursor: 'pointer', fontSize: '13px', fontFamily: tokens.fonts.display }}
+              >
+                ⏹ Arrêter la capture
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setResults([])}
+            style={{ background: 'transparent', border: `1px solid ${tokens.colors.border}`, color: tokens.colors.dim, padding: '12px 16px', borderRadius: tokens.radius.md, cursor: 'pointer', fontSize: '12px', transition: tokens.transitions.normal }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = tokens.colors.red}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = tokens.colors.border}
+          >🗑️</motion.button>
         </div>
 
-        <div style={{ marginTop: '12px', color: '#475569', fontSize: '11px', textAlign: 'center' }}>
+        <div style={{ marginTop: '12px', color: tokens.colors.dim, fontSize: '11px', textAlign: 'center' }}>
           Une fenêtre s'ouvrira pour sélectionner la zone sur n'importe quel écran — se ferme en 15s
         </div>
-      </div>
+      </motion.div>
 
       {/* RÉSULTATS */}
-      <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px' }}>
-        <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em', marginBottom: '14px' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, delay: 0.2 }}
+        style={{ background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.xl, padding: '20px' }}
+      >
+        <div style={{ fontFamily: tokens.fonts.display, fontSize: '11px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide, marginBottom: '14px' }}>
           📝 TEXTES TRADUITS
-        </div>
-        <div ref={resultsRef} style={{ maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {results.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '40px' }}>
-              Les textes détectés et traduits apparaîtront ici
-            </div>
-          ) : (
-            results.map(r => (
-              <div key={r.id} style={{ background: '#111827', borderRadius: '8px', padding: '12px 14px', border: '1px solid #1e2d45' }}>
-                <div style={{ color: '#475569', fontSize: '11px', marginBottom: '6px' }}>🔍 {r.original}</div>
-                <div style={{ color: '#06b6d4', fontSize: '14px', marginBottom: '4px' }}>→ {r.translated}</div>
-                <div style={{ color: '#334155', fontSize: '10px' }}>{r.timestamp}</div>
-              </div>
-            ))
+          {results.length > 0 && (
+            <span style={{ marginLeft: '8px', background: tokens.alpha.cyanLight, borderRadius: tokens.radius.full, padding: '1px 8px', fontSize: '10px' }}>
+              {results.length}
+            </span>
           )}
         </div>
-      </div>
+
+        <div ref={resultsRef} style={{ maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <AnimatePresence>
+            {results.length === 0 ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                style={{ color: tokens.colors.dim, fontSize: '12px', textAlign: 'center', padding: '40px' }}
+              >
+                Les textes détectés et traduits apparaîtront ici
+              </motion.div>
+            ) : (
+              results.map(r => (
+                <motion.div
+                  key={r.id}
+                  initial={{ opacity: 0, x: -12, y: 6 }}
+                  animate={{ opacity: 1, x: 0, y: 0 }}
+                  transition={{ duration: 0.2, ease: [0.0, 0.0, 0.2, 1] }}
+                  style={{ background: tokens.colors.bg3, borderRadius: tokens.radius.md, padding: '12px 14px', border: `1px solid ${tokens.colors.border}` }}
+                >
+                  <div style={{ color: tokens.colors.dim, fontSize: '11px', marginBottom: '6px' }}>🔍 {r.original}</div>
+                  <div style={{ color: tokens.colors.cyan, fontSize: '14px', marginBottom: '4px' }}>→ {r.translated}</div>
+                  <div style={{ color: tokens.colors.veryDim, fontSize: '10px' }}>{r.timestamp}</div>
+                </motion.div>
+              ))
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
     </div>
   )
 }

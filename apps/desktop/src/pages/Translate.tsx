@@ -12,6 +12,16 @@ import { getAvailableEffects, VoiceEffect, applyVoiceEffect } from '../lib/voice
 import { translateText } from '../lib/translation'
 import { speakTranslation } from '../lib/tts'
 import { updateStats } from '../lib/stats'
+import tokens from '../styles/tokens'
+import {
+  ScalePop,
+  SlideUp,
+  SlideDown,
+  FeedItem as AnimFeedItem,
+  OverlayBackdrop,
+  LivePulse,
+  AnimatePresence,
+} from '../components/Animated'
 
 const API_URL = 'https://ggtranslatebackend-production.up.railway.app'
 const DISCORD_API = 'https://ggtranslatebackend-production.up.railway.app'
@@ -51,16 +61,13 @@ const IconMic = ({ color = 'currentColor' }) => (
     <line x1="9" y1="21" x2="15" y2="21"/>
   </svg>
 )
-
 const IconGroups = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="9" cy="7" r="3"/>
-    <circle cx="16" cy="7" r="2.5" opacity="0.7"/>
+    <circle cx="9" cy="7" r="3"/><circle cx="16" cy="7" r="2.5" opacity="0.7"/>
     <path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/>
     <path d="M16 14c2.2.5 4 2.3 4 4.5" opacity="0.7"/>
   </svg>
 )
-
 const IconStats = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
@@ -69,26 +76,18 @@ const IconStats = ({ color = 'currentColor' }) => (
     <circle cx="13.5" cy="15.5" r="1.5" fill={color} stroke="none"/>
   </svg>
 )
-
 const IconProfile = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="8" r="4"/>
-    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
   </svg>
 )
-
 const IconOCR = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
-    <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-    <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
-    <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-    <line x1="8" y1="12" x2="16" y2="12"/>
-    <line x1="8" y1="8" x2="13" y2="8"/>
-    <line x1="8" y1="16" x2="11" y2="16"/>
+    <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+    <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+    <line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="8" x2="13" y2="8"/><line x1="8" y1="16" x2="11" y2="16"/>
   </svg>
 )
-
 const IconOverlay = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="3" width="20" height="14" rx="2"/>
@@ -98,27 +97,23 @@ const IconOverlay = ({ color = 'currentColor' }) => (
     <circle cx="17" cy="10" r="2" fill={color} stroke="none" opacity="0.7"/>
   </svg>
 )
-
 const IconPricing = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
   </svg>
 )
-
 const IconTheme = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="4"/>
     <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
   </svg>
 )
-
 const IconSettings = ({ color = 'currentColor' }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
   </svg>
 )
-
 const IconSignOut = ({ color = 'currentColor' }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -132,7 +127,7 @@ function NavItem({ icon, label, active, onClick, color }: {
   icon: React.ReactNode; label: string; active?: boolean; onClick: () => void; color?: string
 }) {
   const [hovered, setHovered] = useState(false)
-  const activeColor = color || '#06b6d4'
+  const activeColor = color || tokens.colors.cyan
   return (
     <div
       onClick={onClick}
@@ -140,12 +135,12 @@ function NavItem({ icon, label, active, onClick, color }: {
       onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative', width: '48px', height: '48px',
-        borderRadius: '12px', cursor: 'pointer',
+        borderRadius: tokens.radius.xl, cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: active ? `${activeColor}18` : hovered ? 'rgba(255,255,255,0.04)' : 'transparent',
         border: active ? `1px solid ${activeColor}55` : '1px solid transparent',
-        transition: 'all 0.18s',
-        color: active ? activeColor : hovered ? '#94a3b8' : '#475569',
+        transition: tokens.transitions.fast,
+        color: active ? activeColor : hovered ? tokens.colors.muted : tokens.colors.dim,
       }}
       title={label}
     >
@@ -214,6 +209,11 @@ export function TranslatePage() {
   useEffect(() => { detectedGameEmojiRef.current = detectedGameEmoji }, [detectedGameEmoji])
   useEffect(() => { setOtherPlayersTTSEnabled(otherPlayersTTS) }, [otherPlayersTTS])
 
+  // ─── FIX: Sync activeEffect avec le pipeline mid-session ──────────────────
+  useEffect(() => {
+    pipelineRef.current?.setVoiceEffect(activeEffect)
+  }, [activeEffect])
+
   const categories = ['Tous', ...Array.from(new Set(EFFECTS.map(e => e.category)))]
   const filteredEffects = selectedCategory === 'Tous' ? EFFECTS : EFFECTS.filter(e => e.category === selectedCategory)
 
@@ -242,16 +242,8 @@ export function TranslatePage() {
     loadSavedLangs()
   }, [])
 
-  useEffect(() => {
-    if (!langsLoadedRef.current) return
-    window.electron.settings.set('sourceLang', sourceLang)
-  }, [sourceLang])
-
-  useEffect(() => {
-    if (!langsLoadedRef.current) return
-    window.electron.settings.set('targetLang', targetLang)
-  }, [targetLang])
-
+  useEffect(() => { if (!langsLoadedRef.current) return; window.electron.settings.set('sourceLang', sourceLang) }, [sourceLang])
+  useEffect(() => { if (!langsLoadedRef.current) return; window.electron.settings.set('targetLang', targetLang) }, [targetLang])
   useEffect(() => { if (myFeedRef.current) myFeedRef.current.scrollTop = myFeedRef.current.scrollHeight }, [myFeed])
   useEffect(() => { if (otherFeedRef.current) otherFeedRef.current.scrollTop = otherFeedRef.current.scrollHeight }, [otherFeed])
 
@@ -415,7 +407,13 @@ export function TranslatePage() {
     } catch {}
   }
 
-  const liveColors: Record<PipelineState, string> = { inactive: '#475569', listening: '#06b6d4', processing: '#3b82f6', translated: '#22c55e', error: '#ef4444' }
+  const liveColors: Record<PipelineState, string> = {
+    inactive: tokens.colors.stateInactive,
+    listening: tokens.colors.stateListening,
+    processing: tokens.colors.stateProcessing,
+    translated: tokens.colors.stateTranslated,
+    error: tokens.colors.stateError,
+  }
   const liveLabels: Record<PipelineState, string> = {
     inactive: t('translate.live.inactive'),
     listening: t('translate.live.listening'),
@@ -423,56 +421,67 @@ export function TranslatePage() {
     translated: t('translate.live.translated'),
     error: t('translate.live.error'),
   }
-  const otherColors: Record<OtherPlayersState, string> = { inactive: '#475569', listening: '#a855f7', processing: '#3b82f6', error: '#ef4444' }
+  const otherColors: Record<OtherPlayersState, string> = {
+    inactive: tokens.colors.stateInactive,
+    listening: tokens.colors.stateOther,
+    processing: tokens.colors.stateProcessing,
+    error: tokens.colors.stateError,
+  }
 
   const isLocked = liveState === 'processing'
   const isLowTime = plan !== 'pro' && secondsRemaining > 0 && secondsRemaining <= 120
-  const planColor = plan === 'pro' ? '#a855f7' : plan === 'starter' ? '#3b82f6' : plan === 'trial' ? '#06b6d4' : '#64748b'
+  const planColor = plan === 'pro' ? tokens.colors.planPro : plan === 'starter' ? tokens.colors.planStarter : plan === 'trial' ? tokens.colors.planTrial : tokens.colors.planFree
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: 1, filter: theme.filter === 'none' ? undefined : theme.filter }}>
       <style>{`
         @keyframes pulse-red { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.7;transform:scale(1.05)} }
-        @keyframes slide-down { from{transform:translateY(-20px);opacity:0} to{transform:translateY(0);opacity:1} }
-        @keyframes badge-pop { 0%{transform:scale(0.5);opacity:0} 70%{transform:scale(1.1);opacity:1} 100%{transform:scale(1);opacity:1} }
         @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
         @keyframes pulse-green { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes pulse-cyan { 0%,100%{box-shadow:0 0 20px rgba(6,182,212,0.3)} 50%{box-shadow:0 0 40px rgba(6,182,212,0.6)} }
-        .effect-card:hover { border-color: #06b6d4 !important; background: rgba(6,182,212,0.08) !important; }
+        .effect-card:hover { border-color: ${tokens.colors.cyan} !important; background: ${tokens.alpha.cyanLight} !important; }
         .effect-card:hover .preview-btn { opacity: 1 !important; }
-        .feed-item { animation: slide-down 0.2s ease; }
+        .quick-phrase-btn:hover { border-color: ${tokens.colors.border} !important; color: ${tokens.colors.text} !important; background: rgba(255,255,255,0.03) !important; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 99px; }
+        ::-webkit-scrollbar-thumb { background: ${tokens.colors.border}; border-radius: 99px; }
       `}</style>
 
-      {showSessionBadge && (
-        <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(to right, #3b82f6, #06b6d4)', borderRadius: '99px', padding: '10px 20px', zIndex: 500, animation: 'badge-pop 0.4s ease', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>🏆</span>
-          <span style={{ color: '#fff', fontSize: '13px', fontFamily: 'Orbitron, sans-serif', fontWeight: 700 }}>{sessionPhrases} {t('translate.session.badge')}</span>
-        </div>
-      )}
+      {/* ─── SESSION BADGE — ScalePop ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {showSessionBadge && (
+          <ScalePop style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 500 }}>
+            <div style={{ background: tokens.gradients.primaryR, borderRadius: tokens.radius.full, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: tokens.shadows.cyanMd }}>
+              <span style={{ fontSize: '18px' }}>🏆</span>
+              <span style={{ color: tokens.colors.white, fontSize: '13px', fontFamily: tokens.fonts.display, fontWeight: tokens.fontWeights.bold }}>{sessionPhrases} {t('translate.session.badge')}</span>
+            </div>
+          </ScalePop>
+        )}
+      </AnimatePresence>
 
-      {showUpgradePopup && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div style={{ background: '#0d1424', border: '1px solid rgba(249,115,22,0.5)', borderRadius: '20px', padding: '32px', maxWidth: '420px', width: '100%', textAlign: 'center', animation: 'slide-down 0.3s ease' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏱️</div>
-            <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '20px', marginBottom: '8px' }}>{t('translate.trial.end')}</div>
-            <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '24px' }}>
-              Tu as traduit <strong style={{ color: '#06b6d4' }}>{sessionPhrases}</strong> {t('translate.trial.phrases')}
+      {/* ─── UPGRADE POPUP — OverlayBackdrop ──────────────────────────────── */}
+      <AnimatePresence>
+        {showUpgradePopup && (
+          <OverlayBackdrop onClose={() => setShowUpgradePopup(false)}>
+            <div style={{ background: tokens.colors.bg2, border: `1px solid ${tokens.alpha.orangeDim}`, borderRadius: tokens.radius['4xl'], padding: '32px', maxWidth: '420px', width: '100%', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏱️</div>
+              <div style={{ fontFamily: tokens.fonts.display, color: tokens.colors.text, fontSize: '20px', marginBottom: '8px' }}>{t('translate.trial.end')}</div>
+              <div style={{ color: tokens.colors.muted, fontSize: '14px', marginBottom: '24px' }}>
+                Tu as traduit <strong style={{ color: tokens.colors.cyan }}>{sessionPhrases}</strong> {t('translate.trial.phrases')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                <button onClick={() => { setShowUpgradePopup(false); navigate('/pricing') }} style={{ background: tokens.gradients.danger, border: 'none', color: tokens.colors.white, padding: '14px', borderRadius: tokens.radius.lg, cursor: 'pointer', fontSize: '14px', fontFamily: tokens.fonts.display, fontWeight: tokens.fontWeights.bold }}>{t('translate.upgrade.now')}</button>
+                <button onClick={() => setShowUpgradePopup(false)} style={{ background: 'transparent', border: `1px solid ${tokens.colors.border}`, color: tokens.colors.dim, padding: '12px', borderRadius: tokens.radius.lg, cursor: 'pointer', fontSize: '13px' }}>{t('translate.continue.free')}</button>
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-              <button onClick={() => { setShowUpgradePopup(false); navigate('/pricing') }} style={{ background: 'linear-gradient(to right, #f97316, #ef4444)', border: 'none', color: '#fff', padding: '14px', borderRadius: '10px', cursor: 'pointer', fontSize: '14px', fontFamily: 'Orbitron, sans-serif', fontWeight: 700 }}>{t('translate.upgrade.now')}</button>
-              <button onClick={() => setShowUpgradePopup(false)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#475569', padding: '12px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px' }}>{t('translate.continue.free')}</button>
-            </div>
-          </div>
-        </div>
-      )}
+          </OverlayBackdrop>
+        )}
+      </AnimatePresence>
 
       {/* SIDEBAR */}
-      <div style={{ width: '68px', height: '100vh', background: '#080d18', borderRight: '1px solid #0f1a2e', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: '4px', flexShrink: 0, zIndex: 10 }}>
-        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-          <span style={{ fontFamily: 'Orbitron, sans-serif', color: '#fff', fontSize: '12px', fontWeight: 900 }}>GG</span>
+      <div style={{ width: tokens.layout.sidebarWidth, height: '100vh', background: tokens.colors.bgSide, borderRight: `1px solid ${tokens.colors.borderDark}`, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: '4px', flexShrink: 0, zIndex: 10 }}>
+        <div style={{ width: '40px', height: '40px', borderRadius: tokens.radius.lg, background: tokens.gradients.logo, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+          <span style={{ fontFamily: tokens.fonts.display, color: tokens.colors.white, fontSize: '12px', fontWeight: tokens.fontWeights.black }}>GG</span>
         </div>
         <NavItem icon={<IconMic />} label="Traduction" active onClick={() => {}} />
         <NavItem icon={<IconGroups />} label="Groupes" onClick={() => navigate('/groups')} />
@@ -480,12 +489,12 @@ export function TranslatePage() {
         <NavItem icon={<IconProfile />} label="Profil" onClick={() => navigate('/profile')} />
         <NavItem icon={<IconOCR />} label="OCR" onClick={() => navigate('/ocr')} />
         <NavItem icon={<IconOverlay />} label="Overlay" onClick={() => window.electron.overlay.open()} />
-        <NavItem icon={<IconPricing />} label="Plans" onClick={() => navigate('/pricing')} color="#f97316" />
+        <NavItem icon={<IconPricing />} label="Plans" onClick={() => navigate('/pricing')} color={tokens.colors.orange} />
         <div style={{ flex: 1 }} />
         <NavItem icon={<IconTheme />} label="Thème" onClick={() => setShowTheme(true)} />
         <NavItem icon={<IconSettings />} label="Paramètres" onClick={() => setShowSettings(true)} />
         <div
-          style={{ width: '40px', height: '40px', borderRadius: '10px', background: `${planColor}22`, border: `1px solid ${planColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginTop: '4px', color: planColor }}
+          style={{ width: '40px', height: '40px', borderRadius: tokens.radius.lg, background: `${planColor}22`, border: `1px solid ${planColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginTop: '4px', color: planColor, transition: tokens.transitions.normal }}
           onClick={() => navigate('/pricing')}
         >
           <IconPricing color={planColor} />
@@ -493,149 +502,178 @@ export function TranslatePage() {
         <div
           onClick={signOut}
           title={t('translate.signout')}
-          style={{ width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s, color 0.2s', marginBottom: '4px', color: '#475569' }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444' }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '0.4'; e.currentTarget.style.color = '#475569' }}
+          style={{ width: '40px', height: '40px', borderRadius: tokens.radius.lg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s, color 0.2s', marginBottom: '4px', color: tokens.colors.dim }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = tokens.colors.red }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '0.4'; e.currentTarget.style.color = tokens.colors.dim }}
         >
           <IconSignOut />
         </div>
       </div>
 
       {/* ZONE PRINCIPALE */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#060b14' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #0f1a2e', flexShrink: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: tokens.colors.bg }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: `1px solid ${tokens.colors.borderDark}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '13px', fontWeight: 700, letterSpacing: '0.12em' }}>GG TRANSLATE</div>
+            <div style={{ fontFamily: tokens.fonts.display, color: tokens.colors.cyan, fontSize: '13px', fontWeight: tokens.fontWeights.bold, letterSpacing: tokens.letterSpacing.wider }}>GG TRANSLATE</div>
             {detectedGame ? (
-              <div style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: '6px', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <div style={{ width: '5px', height: '5px', background: '#22c55e', borderRadius: '50%', animation: 'pulse-green 2s ease infinite' }} />
+              <div style={{ background: tokens.alpha.purpleDim, border: `1px solid ${tokens.alpha.purpleDim}`, borderRadius: tokens.radius.sm, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div style={{ width: '5px', height: '5px', background: tokens.colors.green, borderRadius: '50%', animation: 'pulse-green 2s ease infinite' }} />
                 <span style={{ fontSize: '12px' }}>{detectedGameEmoji}</span>
-                <span style={{ color: '#a855f7', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>{detectedGame}</span>
+                <span style={{ color: tokens.colors.purple, fontSize: '10px', fontFamily: tokens.fonts.display }}>{detectedGame}</span>
               </div>
             ) : (
-              <div style={{ background: 'rgba(71,85,105,0.1)', border: '1px solid #1e2d45', borderRadius: '6px', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <div style={{ width: '5px', height: '5px', background: '#475569', borderRadius: '50%' }} />
-                <span style={{ color: '#475569', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.game.none')}</span>
+              <div style={{ background: 'rgba(71,85,105,0.1)', border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.sm, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div style={{ width: '5px', height: '5px', background: tokens.colors.dim, borderRadius: '50%' }} />
+                <span style={{ color: tokens.colors.dim, fontSize: '10px', fontFamily: tokens.fonts.display }}>{t('translate.game.none')}</span>
               </div>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {plan !== 'pro' && secondsRemaining > 0 && (
-              <div style={{ color: isLowTime ? '#ef4444' : '#475569', fontSize: '12px', fontFamily: 'Orbitron, sans-serif', animation: isLowTime ? 'pulse-red 1s ease infinite' : 'none' }}>
+              <div style={{ color: isLowTime ? tokens.colors.red : tokens.colors.dim, fontSize: '12px', fontFamily: tokens.fonts.display, animation: isLowTime ? 'pulse-red 1s ease infinite' : 'none' }}>
                 {Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}
               </div>
             )}
-            {plan === 'pro' && <div style={{ color: '#a855f7', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.plan.unlimited')}</div>}
-            {virtualDeviceId && <div style={{ color: '#22c55e', fontSize: '10px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.mic.active')}</div>}
-            <button onClick={() => setRightPanelOpen(!rightPanelOpen)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#475569', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', transition: 'all 0.2s' }}>
+            {plan === 'pro' && <div style={{ color: tokens.colors.purple, fontSize: '11px', fontFamily: tokens.fonts.display }}>{t('translate.plan.unlimited')}</div>}
+            {virtualDeviceId && <div style={{ color: tokens.colors.green, fontSize: '10px', fontFamily: tokens.fonts.display }}>{t('translate.mic.active')}</div>}
+            <button onClick={() => setRightPanelOpen(!rightPanelOpen)} style={{ background: 'transparent', border: `1px solid ${tokens.colors.border}`, color: tokens.colors.dim, padding: '4px 10px', borderRadius: tokens.radius.sm, cursor: 'pointer', fontSize: '12px', transition: tokens.transitions.normal }}>
               {rightPanelOpen ? '▶' : '◀'}
             </button>
           </div>
         </div>
 
-        {updateDownloaded && (
-          <div style={{ background: 'rgba(34,197,94,0.08)', borderBottom: '1px solid #22c55e33', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <span style={{ color: '#22c55e', fontSize: '12px' }}>{t('translate.update.ready')} {updateVersion} {t('translate.update.ready2')}</span>
-            <button onClick={() => window.electron.updater.install()} style={{ background: '#22c55e', border: 'none', color: '#fff', padding: '4px 12px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.update.install')}</button>
-          </div>
-        )}
+        {/* ─── UPDATE BANNER — SlideDown ──────────────────────────────────── */}
+        <AnimatePresence>
+          {updateDownloaded && (
+            <SlideDown>
+              <div style={{ background: tokens.alpha.greenDim, borderBottom: `1px solid ${tokens.colors.green}33`, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                <span style={{ color: tokens.colors.green, fontSize: '12px' }}>{t('translate.update.ready')} {updateVersion} {t('translate.update.ready2')}</span>
+                <button onClick={() => window.electron.updater.install()} style={{ background: tokens.colors.green, border: 'none', color: tokens.colors.white, padding: '4px 12px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontFamily: tokens.fonts.display }}>{t('translate.update.install')}</button>
+              </div>
+            </SlideDown>
+          )}
+        </AnimatePresence>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+          {/* SÉLECTEURS LANGUE */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.12em', marginBottom: '5px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.speak')}</div>
-              <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} style={{ width: '100%', background: '#0d1424', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', outline: 'none' }}>
+              <div style={{ color: tokens.colors.dim, fontSize: '10px', letterSpacing: tokens.letterSpacing.wider, marginBottom: '5px', fontFamily: tokens.fonts.display }}>{t('translate.speak')}</div>
+              <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} style={{ width: '100%', background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, color: tokens.colors.text, padding: '10px 14px', borderRadius: tokens.radius.md, fontSize: '13px', cursor: 'pointer', outline: 'none' }}>
                 {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.name}</option>)}
               </select>
             </div>
-            <button onClick={swapLanguages} style={{ marginTop: '18px', background: '#0d1424', border: '1px solid #1e2d45', color: '#94a3b8', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontSize: '14px', transition: 'all 0.2s', flexShrink: 0 }}>⇄</button>
+            <button onClick={swapLanguages} style={{ marginTop: '18px', background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, color: tokens.colors.muted, width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontSize: '14px', transition: tokens.transitions.normal, flexShrink: 0 }}>⇄</button>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.12em', marginBottom: '5px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.hear')}</div>
-              <select value={targetLang} onChange={e => setTargetLang(e.target.value)} style={{ width: '100%', background: '#0d1424', border: '1px solid #1e2d45', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', outline: 'none' }}>
+              <div style={{ color: tokens.colors.dim, fontSize: '10px', letterSpacing: tokens.letterSpacing.wider, marginBottom: '5px', fontFamily: tokens.fonts.display }}>{t('translate.hear')}</div>
+              <select value={targetLang} onChange={e => setTargetLang(e.target.value)} style={{ width: '100%', background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, color: tokens.colors.text, padding: '10px 14px', borderRadius: tokens.radius.md, fontSize: '13px', cursor: 'pointer', outline: 'none' }}>
                 {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.name}</option>)}
               </select>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px', padding: '24px', background: '#0d1424', borderRadius: '16px', border: `1px solid ${liveState !== 'inactive' ? liveColors[liveState] + '44' : '#1e2d45'}`, transition: 'border-color 0.3s' }}>
-            <button onClick={toggleLive} disabled={isLocked} style={{ width: '100px', height: '100px', borderRadius: '50%', background: liveState === 'listening' ? 'rgba(6,182,212,0.1)' : '#111827', border: `2px solid ${liveColors[liveState]}`, cursor: isLocked ? 'not-allowed' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', transition: 'all 0.2s', opacity: isLocked ? 0.7 : 1, animation: liveState === 'listening' ? 'pulse-cyan 2s ease infinite' : 'none' }}>
-              <span style={{ fontSize: '28px', color: liveColors[liveState] }}>◉</span>
-              <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '10px', color: liveColors[liveState], letterSpacing: '0.15em' }}>LIVE</span>
-            </button>
-            <div style={{ color: liveColors[liveState], fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.1em' }}>
+          {/* ZONE LIVE */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px', padding: '24px', background: tokens.colors.bg2, borderRadius: '16px', border: `1px solid ${liveState !== 'inactive' ? liveColors[liveState] + '44' : tokens.colors.border}`, transition: 'border-color 0.3s' }}>
+
+            {/* ─── BOUTON LIVE — LivePulse ──────────────────────────────────── */}
+            <div style={{ position: 'relative' }}>
+              <LivePulse active={liveState === 'listening'} color={tokens.colors.cyan} />
+              <button
+                onClick={toggleLive}
+                disabled={isLocked}
+                style={{ width: '100px', height: '100px', borderRadius: '50%', background: liveState === 'listening' ? tokens.alpha.cyanLight : tokens.colors.bg3, border: `2px solid ${liveColors[liveState]}`, cursor: isLocked ? 'not-allowed' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', transition: tokens.transitions.normal, opacity: isLocked ? 0.7 : 1, animation: liveState === 'listening' ? 'pulse-cyan 2s ease infinite' : 'none', position: 'relative' }}
+              >
+                <span style={{ fontSize: '28px', color: liveColors[liveState] }}>◉</span>
+                <span style={{ fontFamily: tokens.fonts.display, fontSize: '10px', color: liveColors[liveState], letterSpacing: '0.15em' }}>LIVE</span>
+              </button>
+            </div>
+
+            <div style={{ color: liveColors[liveState], fontSize: '11px', fontFamily: tokens.fonts.display, letterSpacing: tokens.letterSpacing.wide }}>
               {liveState === 'inactive' ? t('translate.live.start') : liveLabels[liveState]}
             </div>
-            {currentTranscript && (
-              <div style={{ width: '100%', padding: '8px 14px', background: 'rgba(6,182,212,0.05)', borderRadius: '8px', fontSize: '13px', color: '#06b6d4', fontStyle: 'italic', border: '1px solid rgba(6,182,212,0.12)', textAlign: 'center' }}>
-                {currentTranscript}
-              </div>
-            )}
-            {errorMsg && <div style={{ color: '#ef4444', fontSize: '12px' }}>{errorMsg}</div>}
 
-            <div style={{ width: '100%', paddingTop: '12px', borderTop: '1px solid #1e2d45' }}>
+            <AnimatePresence>
+              {currentTranscript && (
+                <SlideUp style={{ width: '100%' }}>
+                  <div style={{ padding: '8px 14px', background: tokens.alpha.cyanDim, borderRadius: tokens.radius.md, fontSize: '13px', color: tokens.colors.cyan, fontStyle: 'italic', border: `1px solid ${tokens.alpha.cyanBorder}`, textAlign: 'center' }}>
+                    {currentTranscript}
+                  </div>
+                </SlideUp>
+              )}
+            </AnimatePresence>
+
+            {errorMsg && <div style={{ color: tokens.colors.red, fontSize: '12px' }}>{errorMsg}</div>}
+
+            {/* OTHER PLAYERS */}
+            <div style={{ width: '100%', paddingTop: '12px', borderTop: `1px solid ${tokens.colors.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '14px' }}>🖥️</span>
                   <div>
-                    <div style={{ color: '#fff', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.other.title')}</div>
+                    <div style={{ color: tokens.colors.text, fontSize: '11px', fontFamily: tokens.fonts.display }}>{t('translate.other.title')}</div>
                     <div style={{ color: otherColors[otherPlayersState], fontSize: '10px' }}>
                       {otherPlayersState === 'inactive' ? t('translate.other.inactive') : otherPlayersState === 'listening' ? t('translate.other.listening') : t('translate.other.processing')}
                     </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button onClick={() => setOtherPlayersTTS(!otherPlayersTTS)} style={{ background: otherPlayersTTS ? 'rgba(6,182,212,0.15)' : 'rgba(71,85,105,0.15)', border: `1px solid ${otherPlayersTTS ? '#06b6d4' : '#1e2d45'}`, color: otherPlayersTTS ? '#06b6d4' : '#475569', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button onClick={() => setOtherPlayersTTS(!otherPlayersTTS)} style={{ background: otherPlayersTTS ? tokens.alpha.cyanMid : 'rgba(71,85,105,0.15)', border: `1px solid ${otherPlayersTTS ? tokens.colors.cyan : tokens.colors.border}`, color: otherPlayersTTS ? tokens.colors.cyan : tokens.colors.dim, padding: '4px 10px', borderRadius: tokens.radius.sm, cursor: 'pointer', fontSize: '12px', transition: tokens.transitions.normal, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     {otherPlayersTTS ? '🔊' : '🔇'}
-                    <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '9px' }}>{otherPlayersTTS ? 'VOIX' : 'TEXTE'}</span>
+                    <span style={{ fontFamily: tokens.fonts.display, fontSize: '9px' }}>{otherPlayersTTS ? 'VOIX' : 'TEXTE'}</span>
                   </button>
-                  <button onClick={toggleOtherPlayers} style={{ background: otherPlayersState !== 'inactive' ? 'rgba(168,85,247,0.15)' : 'transparent', border: `1px solid ${otherPlayersState !== 'inactive' ? '#a855f7' : '#1e2d45'}`, color: otherPlayersState !== 'inactive' ? '#a855f7' : canUseFeature('otherPlayers') ? '#94a3b8' : '#334155', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', transition: 'all 0.2s', opacity: canUseFeature('otherPlayers') ? 1 : 0.5 }}>
+                  <button onClick={toggleOtherPlayers} style={{ background: otherPlayersState !== 'inactive' ? tokens.alpha.purpleMid : 'transparent', border: `1px solid ${otherPlayersState !== 'inactive' ? tokens.colors.purple : tokens.colors.border}`, color: otherPlayersState !== 'inactive' ? tokens.colors.purple : canUseFeature('otherPlayers') ? tokens.colors.muted : tokens.colors.veryDim, padding: '6px 14px', borderRadius: tokens.radius.md, cursor: 'pointer', fontSize: '11px', fontFamily: tokens.fonts.display, transition: tokens.transitions.normal, opacity: canUseFeature('otherPlayers') ? 1 : 0.5 }}>
                     {otherPlayersState !== 'inactive' ? t('translate.other.stop') : canUseFeature('otherPlayers') ? t('translate.other.capture') : t('translate.other.upgrade')}
                   </button>
                 </div>
               </div>
-              {currentOtherTranscript && (
-                <div style={{ width: '100%', padding: '6px 12px', background: 'rgba(168,85,247,0.05)', borderRadius: '6px', fontSize: '12px', color: '#a855f7', fontStyle: 'italic' }}>
-                  {currentOtherTranscript}
-                </div>
-              )}
-              {otherError && <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px' }}>{otherError}</div>}
+              <AnimatePresence>
+                {currentOtherTranscript && (
+                  <SlideUp>
+                    <div style={{ width: '100%', padding: '6px 12px', background: tokens.alpha.purpleDim, borderRadius: tokens.radius.sm, fontSize: '12px', color: tokens.colors.purple, fontStyle: 'italic' }}>
+                      {currentOtherTranscript}
+                    </div>
+                  </SlideUp>
+                )}
+              </AnimatePresence>
+              {otherError && <div style={{ color: tokens.colors.red, fontSize: '11px', marginTop: '4px' }}>{otherError}</div>}
             </div>
           </div>
 
-          <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', borderBottom: '1px solid #1e2d45' }}>
-              <button onClick={() => setActiveTab('my')} style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: activeTab === 'my' ? '#06b6d4' : '#475569', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.08em', borderBottom: activeTab === 'my' ? '2px solid #06b6d4' : '2px solid transparent', transition: 'all 0.2s' }}>
-                {t('translate.feed.my')} {myFeed.length > 0 && <span style={{ background: 'rgba(6,182,212,0.2)', borderRadius: '99px', padding: '1px 6px', marginLeft: '4px' }}>{myFeed.length}</span>}
+          {/* FEED */}
+          <div style={{ background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.xl, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', borderBottom: `1px solid ${tokens.colors.border}` }}>
+              <button onClick={() => setActiveTab('my')} style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: activeTab === 'my' ? tokens.colors.cyan : tokens.colors.dim, cursor: 'pointer', fontSize: '11px', fontFamily: tokens.fonts.display, letterSpacing: tokens.letterSpacing.normal, borderBottom: activeTab === 'my' ? `2px solid ${tokens.colors.cyan}` : '2px solid transparent', transition: tokens.transitions.normal }}>
+                {t('translate.feed.my')} {myFeed.length > 0 && <span style={{ background: tokens.alpha.cyanLight, borderRadius: tokens.radius.full, padding: '1px 6px', marginLeft: '4px' }}>{myFeed.length}</span>}
               </button>
-              <button onClick={() => setActiveTab('other')} style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: activeTab === 'other' ? '#a855f7' : '#475569', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif', letterSpacing: '0.08em', borderBottom: activeTab === 'other' ? '2px solid #a855f7' : '2px solid transparent', transition: 'all 0.2s' }}>
-                {t('translate.feed.other')} {otherFeed.length > 0 && <span style={{ background: 'rgba(168,85,247,0.2)', borderRadius: '99px', padding: '1px 6px', marginLeft: '4px' }}>{otherFeed.length}</span>}
+              <button onClick={() => setActiveTab('other')} style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: activeTab === 'other' ? tokens.colors.purple : tokens.colors.dim, cursor: 'pointer', fontSize: '11px', fontFamily: tokens.fonts.display, letterSpacing: tokens.letterSpacing.normal, borderBottom: activeTab === 'other' ? `2px solid ${tokens.colors.purple}` : '2px solid transparent', transition: tokens.transitions.normal }}>
+                {t('translate.feed.other')} {otherFeed.length > 0 && <span style={{ background: tokens.alpha.purpleDim, borderRadius: tokens.radius.full, padding: '1px 6px', marginLeft: '4px' }}>{otherFeed.length}</span>}
               </button>
             </div>
             <div ref={activeTab === 'my' ? myFeedRef : otherFeedRef} style={{ height: '220px', overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {activeTab === 'my' ? (
                 myFeed.length === 0 ? (
-                  <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', marginTop: '70px' }}>{t('translate.feed.empty')}</div>
+                  <div style={{ color: tokens.colors.dim, fontSize: '12px', textAlign: 'center', marginTop: '70px' }}>{t('translate.feed.empty')}</div>
                 ) : (
                   myFeed.map(item => (
-                    <div key={item.id} className="feed-item" style={{ background: '#111827', borderRadius: '8px', padding: '9px 12px', border: '1px solid #1e2d45' }}>
-                      <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '3px' }}>{item.original}</div>
-                      <div style={{ color: '#06b6d4', fontSize: '12px', marginBottom: '2px' }}>→ {item.translated}</div>
-                      <div style={{ color: '#334155', fontSize: '10px' }}>{item.timestamp}</div>
-                    </div>
+                    <AnimFeedItem key={item.id} style={{ background: tokens.colors.bg3, borderRadius: tokens.radius.md, padding: '9px 12px', border: `1px solid ${tokens.colors.border}` }}>
+                      <div style={{ color: tokens.colors.muted, fontSize: '11px', marginBottom: '3px' }}>{item.original}</div>
+                      <div style={{ color: tokens.colors.cyan, fontSize: '12px', marginBottom: '2px' }}>→ {item.translated}</div>
+                      <div style={{ color: tokens.colors.veryDim, fontSize: '10px' }}>{item.timestamp}</div>
+                    </AnimFeedItem>
                   ))
                 )
               ) : (
                 otherFeed.length === 0 ? (
-                  <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', marginTop: '70px' }}>
+                  <div style={{ color: tokens.colors.dim, fontSize: '12px', textAlign: 'center', marginTop: '70px' }}>
                     {canUseFeature('otherPlayers') ? t('translate.feed.other.empty') : t('translate.feed.other.locked')}
                   </div>
                 ) : (
                   otherFeed.map(item => (
-                    <div key={item.id} className="feed-item" style={{ background: '#111827', borderRadius: '8px', padding: '9px 12px', border: '1px solid #1e2d45' }}>
-                      <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '3px' }}>{item.original}</div>
-                      <div style={{ color: '#a855f7', fontSize: '12px', marginBottom: '2px' }}>→ {item.translated}</div>
-                      <div style={{ color: '#334155', fontSize: '10px' }}>{item.timestamp}</div>
-                    </div>
+                    <AnimFeedItem key={item.id} style={{ background: tokens.colors.bg3, borderRadius: tokens.radius.md, padding: '9px 12px', border: `1px solid ${tokens.colors.border}` }}>
+                      <div style={{ color: tokens.colors.muted, fontSize: '11px', marginBottom: '3px' }}>{item.original}</div>
+                      <div style={{ color: tokens.colors.purple, fontSize: '12px', marginBottom: '2px' }}>→ {item.translated}</div>
+                      <div style={{ color: tokens.colors.veryDim, fontSize: '10px' }}>{item.timestamp}</div>
+                    </AnimFeedItem>
                   ))
                 )
               )}
@@ -645,20 +683,20 @@ export function TranslatePage() {
       </div>
 
       {/* PANNEAU DROIT */}
-      <div style={{ width: rightPanelOpen ? '280px' : '0px', overflow: 'hidden', transition: 'width 0.28s ease', background: '#080d18', borderLeft: '1px solid #0f1a2e', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ width: '280px', height: '100%', overflowY: 'auto', padding: '16px 14px' }}>
+      <div style={{ width: rightPanelOpen ? tokens.layout.rightPanelWidth : '0px', overflow: 'hidden', transition: tokens.transitions.panel, background: tokens.colors.bgSide, borderLeft: `1px solid ${tokens.colors.borderDark}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div style={{ width: tokens.layout.rightPanelWidth, height: '100%', overflowY: 'auto', padding: '16px 14px' }}>
           <div style={{ marginBottom: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '10px', color: '#06b6d4', letterSpacing: '0.1em' }}>{t('translate.effects.title')}</div>
-              {canUseFeature('voiceEffects') && <span style={{ color: '#475569', fontSize: '10px' }}>{activeEffect !== 'normal' ? `✅ ${EFFECTS.find(e => e.id === activeEffect)?.name}` : 'Normal'}</span>}
+              <div style={{ fontFamily: tokens.fonts.display, fontSize: '10px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide }}>{t('translate.effects.title')}</div>
+              {canUseFeature('voiceEffects') && <span style={{ color: tokens.colors.dim, fontSize: '10px' }}>{activeEffect !== 'normal' ? `✅ ${EFFECTS.find(e => e.id === activeEffect)?.name}` : 'Normal'}</span>}
             </div>
             {!canUseFeature('voiceEffects') ? (
-              <button onClick={() => navigate('/pricing')} style={{ width: '100%', background: 'transparent', border: '1px solid #06b6d4', color: '#06b6d4', padding: '8px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>{t('translate.effects.unlock')}</button>
+              <button onClick={() => navigate('/pricing')} style={{ width: '100%', background: 'transparent', border: `1px solid ${tokens.colors.cyan}`, color: tokens.colors.cyan, padding: '8px', borderRadius: tokens.radius.md, cursor: 'pointer', fontSize: '11px', fontFamily: tokens.fonts.display }}>{t('translate.effects.unlock')}</button>
             ) : (
               <>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '10px' }}>
                   {categories.map(cat => (
-                    <button key={cat} onClick={() => setSelectedCategory(cat)} style={{ background: selectedCategory === cat ? 'rgba(6,182,212,0.15)' : 'transparent', border: `1px solid ${selectedCategory === cat ? '#06b6d4' : '#1e2d45'}`, color: selectedCategory === cat ? '#06b6d4' : '#475569', padding: '2px 8px', borderRadius: '99px', cursor: 'pointer', fontSize: '10px', transition: 'all 0.2s' }}>{cat}</button>
+                    <button key={cat} onClick={() => setSelectedCategory(cat)} style={{ background: selectedCategory === cat ? tokens.alpha.cyanMid : 'transparent', border: `1px solid ${selectedCategory === cat ? tokens.colors.cyan : tokens.colors.border}`, color: selectedCategory === cat ? tokens.colors.cyan : tokens.colors.dim, padding: '2px 8px', borderRadius: tokens.radius.full, cursor: 'pointer', fontSize: '10px', transition: tokens.transitions.normal }}>{cat}</button>
                   ))}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
@@ -666,12 +704,12 @@ export function TranslatePage() {
                     const isActive = activeEffect === effect.id
                     const isPreviewing = previewingEffect === effect.id
                     return (
-                      <div key={effect.id} className="effect-card" onClick={() => setActiveEffect(effect.id)} style={{ position: 'relative', background: isActive ? 'rgba(6,182,212,0.15)' : '#111827', border: `1px solid ${isActive ? '#06b6d4' : '#1e2d45'}`, borderRadius: '10px', padding: '8px 4px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', transition: 'all 0.2s' }}>
+                      <div key={effect.id} className="effect-card" onClick={() => setActiveEffect(effect.id)} style={{ position: 'relative', background: isActive ? tokens.alpha.cyanMid : tokens.colors.bg3, border: `1px solid ${isActive ? tokens.colors.cyan : tokens.colors.border}`, borderRadius: tokens.radius.lg, padding: '8px 4px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', transition: tokens.transitions.normal }}>
                         <div style={{ fontSize: '18px', lineHeight: 1 }}>{effect.emoji}</div>
-                        <div style={{ color: isActive ? '#06b6d4' : '#94a3b8', fontSize: '9px', textAlign: 'center', fontFamily: 'Orbitron, sans-serif', lineHeight: 1.2 }}>{effect.name}</div>
-                        {isActive && <div style={{ position: 'absolute', top: '3px', right: '3px', width: '5px', height: '5px', background: '#06b6d4', borderRadius: '50%' }} />}
+                        <div style={{ color: isActive ? tokens.colors.cyan : tokens.colors.muted, fontSize: '9px', textAlign: 'center', fontFamily: tokens.fonts.display, lineHeight: 1.2 }}>{effect.name}</div>
+                        {isActive && <div style={{ position: 'absolute', top: '3px', right: '3px', width: '5px', height: '5px', background: tokens.colors.cyan, borderRadius: '50%' }} />}
                         {effect.id !== 'normal' && (
-                          <button className="preview-btn" onClick={(e) => previewEffect(effect, e)} style={{ position: 'absolute', bottom: '-3px', right: '-3px', width: '18px', height: '18px', background: isPreviewing ? '#06b6d4' : '#1e2d45', border: `1px solid ${isPreviewing ? '#06b6d4' : '#334155'}`, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', color: '#fff', opacity: isPreviewing ? 1 : 0, transition: 'all 0.2s', zIndex: 2 }}>
+                          <button className="preview-btn" onClick={(e) => previewEffect(effect, e)} style={{ position: 'absolute', bottom: '-3px', right: '-3px', width: '18px', height: '18px', background: isPreviewing ? tokens.colors.cyan : tokens.colors.border, border: `1px solid ${isPreviewing ? tokens.colors.cyan : tokens.colors.borderMuted}`, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', color: tokens.colors.white, opacity: isPreviewing ? 1 : 0, transition: tokens.transitions.normal, zIndex: 2 }}>
                             {isPreviewing ? <div style={{ width: '7px', height: '7px', border: '1.5px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> : '▶'}
                           </button>
                         )}
@@ -685,12 +723,12 @@ export function TranslatePage() {
 
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '10px', color: '#06b6d4', letterSpacing: '0.1em' }}>{t('translate.phrases.title')}</div>
-              {detectedGame && <span style={{ color: '#a855f7', fontSize: '9px', fontFamily: 'Orbitron, sans-serif' }}>{detectedGameEmoji} {detectedGame}</span>}
+              <div style={{ fontFamily: tokens.fonts.display, fontSize: '10px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide }}>{t('translate.phrases.title')}</div>
+              {detectedGame && <span style={{ color: tokens.colors.purple, fontSize: '9px', fontFamily: tokens.fonts.display }}>{detectedGameEmoji} {detectedGame}</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {quickPhrases.map(phrase => (
-                <button key={phrase} onClick={() => handleQuickPhrase(phrase)} style={{ background: 'transparent', border: '1px solid #1e2d45', color: '#94a3b8', padding: '6px 10px', borderRadius: '7px', cursor: 'pointer', fontSize: '11px', textAlign: 'left', transition: 'all 0.15s' }}>{phrase}</button>
+                <button key={phrase} className="quick-phrase-btn" onClick={() => handleQuickPhrase(phrase)} style={{ background: 'transparent', border: `1px solid ${tokens.colors.border}`, color: tokens.colors.muted, padding: '6px 10px', borderRadius: tokens.radius.sm, cursor: 'pointer', fontSize: '11px', textAlign: 'left', transition: tokens.transitions.fast }}>{phrase}</button>
               ))}
             </div>
           </div>

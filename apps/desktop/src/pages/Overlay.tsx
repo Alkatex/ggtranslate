@@ -1,27 +1,32 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import tokens from '../styles/tokens'
 
 interface Translation {
+  id: number
   original: string
   translated: string
   timestamp: string
   type: 'my' | 'other'
 }
 
+let translationCounter = 0
+
 export function OverlayPage() {
   const [translations, setTranslations] = useState<Translation[]>([])
-  const [isDragging, setIsDragging] = useState(false)
   const [position, setPosition] = useState<'top-right' | 'top-left' | 'bottom-right' | 'bottom-left'>('top-right')
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
-    window.electron.overlay?.onTranslation((data: Translation) => {
+    window.electron.overlay?.onTranslation((data: Omit<Translation, 'id'>) => {
+      const id = ++translationCounter
       setTranslations(prev => {
-        const updated = [...prev, data]
+        const updated = [...prev, { ...data, id }]
         return updated.slice(-5)
       })
 
       const t = setTimeout(() => {
-        setTranslations(prev => prev.slice(1))
+        setTranslations(prev => prev.filter(tr => tr.id !== id))
       }, 6000)
       timeoutsRef.current.push(t)
     })
@@ -32,7 +37,6 @@ export function OverlayPage() {
     }
   }, [])
 
-  // ─── Auto-position selon le coin ─────────────────────────────────────────
   const positionStyles: Record<string, React.CSSProperties> = {
     'top-right':    { top: 8, right: 8, bottom: 'auto', left: 'auto' },
     'top-left':     { top: 8, left: 8, bottom: 'auto', right: 'auto' },
@@ -41,118 +45,154 @@ export function OverlayPage() {
   }
 
   const corners: Array<'top-right' | 'top-left' | 'bottom-right' | 'bottom-left'> = [
-    'top-right', 'top-left', 'bottom-right', 'bottom-left'
+    'top-right', 'top-left', 'bottom-right', 'bottom-left',
   ]
 
+  const isRight = position.includes('right')
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      background: 'transparent',
-      userSelect: 'none',
-    }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'transparent', userSelect: 'none' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: transparent !important; }
-        @keyframes slide-in {
-          from { transform: translateX(20px); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
+        html, body, #root{ background: transparent !important; }
+        ::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <div style={{
-        position: 'fixed',
-        width: '300px',
-        ...positionStyles[position],
-      }}>
-        {/* HANDLE DRAG + CONTRÔLES */}
+      <div style={{ position: 'fixed', width: '300px', ...positionStyles[position] }}>
+
+        {/* ─── HANDLE — quasi transparent ───────────────────────────────────── */}
         <div
-          onMouseDown={() => setIsDragging(true)}
-          onMouseUp={() => setIsDragging(false)}
           style={{
-            background: 'rgba(6,182,212,0.15)',
-            border: '1px solid rgba(6,182,212,0.3)',
-            borderRadius: '8px 8px 0 0',
-            padding: '4px 8px',
+            background: 'rgba(0,0,0,0.15)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(6,182,212,0.2)',
+            borderRadius: '10px 10px 0 0',
+            padding: '5px 8px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            cursor: 'grab', marginBottom: '4px',
+            cursor: 'grab',
+            marginBottom: '3px',
             WebkitAppRegion: 'drag',
           } as any}
         >
-          <span style={{
-            fontFamily: 'Orbitron, sans-serif',
-            color: '#06b6d4', fontSize: '9px',
-            letterSpacing: '0.1em',
-          }}>GG TRANSLATE</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '5px', height: '5px', background: tokens.colors.cyan, borderRadius: '50%', boxShadow: `0 0 6px ${tokens.colors.cyan}` }} />
+            <span style={{ fontFamily: tokens.fonts.display, color: tokens.colors.cyan, fontSize: '9px', letterSpacing: tokens.letterSpacing.wide }}>
+              GG TRANSLATE
+            </span>
+          </div>
 
-          <div style={{ display: 'flex', gap: '4px', WebkitAppRegion: 'no-drag' } as any}>
-            {/* Boutons changement de coin */}
+          <div style={{ display: 'flex', gap: '3px', WebkitAppRegion: 'no-drag' } as any}>
             {corners.map(corner => (
               <button
                 key={corner}
                 onClick={() => setPosition(corner)}
                 title={corner}
                 style={{
-                  background: position === corner ? 'rgba(6,182,212,0.3)' : 'transparent',
-                  border: `1px solid ${position === corner ? '#06b6d4' : 'rgba(6,182,212,0.2)'}`,
-                  color: '#06b6d4', cursor: 'pointer',
-                  width: '14px', height: '14px',
-                  borderRadius: '3px', fontSize: '7px',
+                  background: position === corner ? 'rgba(6,182,212,0.2)' : 'transparent',
+                  border: `1px solid ${position === corner ? tokens.colors.cyan : 'rgba(6,182,212,0.2)'}`,
+                  color: tokens.colors.cyan,
+                  cursor: 'pointer',
+                  width: '16px', height: '16px',
+                  borderRadius: '3px', fontSize: '8px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   padding: 0,
+                  transition: tokens.transitions.fast,
                 }}
               >
-                {corner === 'top-left' ? '↖' :
-                 corner === 'top-right' ? '↗' :
-                 corner === 'bottom-left' ? '↙' : '↘'}
+                {corner === 'top-left' ? '↖' : corner === 'top-right' ? '↗' : corner === 'bottom-left' ? '↙' : '↘'}
               </button>
             ))}
             <button
               onClick={() => window.electron.overlay?.close()}
               style={{
                 background: 'transparent', border: 'none',
-                color: '#475569', cursor: 'pointer', fontSize: '12px',
+                color: tokens.colors.dim, cursor: 'pointer', fontSize: '13px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '16px', height: '16px',
+                transition: tokens.transitions.fast,
                 WebkitAppRegion: 'no-drag',
               } as any}
+              onMouseEnter={e => e.currentTarget.style.color = tokens.colors.red}
+              onMouseLeave={e => e.currentTarget.style.color = tokens.colors.dim}
             >✕</button>
           </div>
         </div>
 
-        {/* TRADUCTIONS */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {translations.length === 0 ? (
-            <div style={{
-              background: 'rgba(0,0,0,0.6)',
-              borderRadius: '8px', padding: '8px 12px',
-              color: '#475569', fontSize: '11px',
-              fontFamily: 'Orbitron, sans-serif',
-              textAlign: 'center',
-            }}>
-              En attente de traductions...
-            </div>
-          ) : (
-            translations.map((t, i) => (
-              <div key={i} style={{
-                background: t.type === 'my'
-                  ? 'rgba(6,182,212,0.15)'
-                  : 'rgba(168,85,247,0.15)',
-                border: `1px solid ${t.type === 'my'
-                  ? 'rgba(6,182,212,0.4)'
-                  : 'rgba(168,85,247,0.4)'}`,
-                borderRadius: '8px', padding: '6px 10px',
-                animation: 'slide-in 0.2s ease',
-                backdropFilter: 'blur(10px)',
-              }}>
-                <div style={{
-                  color: t.type === 'my' ? '#06b6d4' : '#a855f7',
-                  fontSize: '12px', marginBottom: '2px',
-                }}>{t.translated}</div>
-                <div style={{ color: '#475569', fontSize: '10px' }}>
-                  {t.type === 'my' ? '🎤' : '🖥️'} {t.original}
-                </div>
-              </div>
-            ))
-          )}
+        {/* ─── TRADUCTIONS — AnimatePresence ────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+          <AnimatePresence mode="popLayout">
+            {translations.length === 0 ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                style={{
+                  background: 'rgba(0,0,0,0.15)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: tokens.colors.dim,
+                  fontSize: '11px',
+                  fontFamily: tokens.fonts.display,
+                  textAlign: 'center',
+                  letterSpacing: tokens.letterSpacing.tight,
+                } as any}
+              >
+                En attente de traductions...
+              </motion.div>
+            ) : (
+              translations.map(tr => (
+                <motion.div
+                  key={tr.id}
+                  initial={{ opacity: 0, x: isRight ? 20 : -20, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: isRight ? 20 : -20, scale: 0.95 }}
+                  transition={{ duration: 0.2, ease: [0.0, 0.0, 0.2, 1] }}
+                  style={{
+                    background: tr.type === 'my'
+                      ? 'rgba(6,182,212,0.08)'
+                      : 'rgba(168,85,247,0.08)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    border: `1px solid ${tr.type === 'my'
+                      ? 'rgba(6,182,212,0.25)'
+                      : 'rgba(168,85,247,0.25)'}`,
+                    borderRadius: '8px',
+                    padding: '7px 10px',
+                    borderLeft: `3px solid ${tr.type === 'my' ? tokens.colors.cyan : tokens.colors.purple}`,
+                  } as any}
+                >
+                  <div style={{
+                    color: tr.type === 'my' ? tokens.colors.cyan : tokens.colors.purple,
+                    fontSize: '13px',
+                    fontWeight: tokens.fontWeights.medium,
+                    marginBottom: '3px',
+                    lineHeight: 1.4,
+                  }}>
+                    {tr.translated}
+                  </div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    color: tokens.colors.dim, fontSize: '10px',
+                  }}>
+                    <span style={{ fontSize: '9px' }}>{tr.type === 'my' ? '🎤' : '🖥️'}</span>
+                    <span style={{ opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+                      {tr.original}
+                    </span>
+                    <span style={{ marginLeft: 'auto', fontSize: '9px', flexShrink: 0, color: tokens.colors.veryDim }}>
+                      {tr.timestamp}
+                    </span>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

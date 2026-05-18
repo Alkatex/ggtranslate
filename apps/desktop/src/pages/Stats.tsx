@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import { useAppLanguage } from '../store/appLanguage'
 import { supabase } from '../lib/supabase'
+import { motion, AnimatePresence } from 'motion/react'
+import tokens from '../styles/tokens'
 
 interface UserStats {
   total_phrases: number
@@ -37,7 +39,6 @@ export function StatsPage() {
   })
   const [loading, setLoading] = useState(true)
 
-  // ← Dépend de user — attend que initAuth soit terminé
   useEffect(() => {
     if (user) loadStats()
   }, [user])
@@ -74,133 +75,197 @@ export function StatsPage() {
   const hours = Math.floor(stats.total_minutes / 60)
   const minutes = stats.total_minutes % 60
 
+  const statCards = [
+    { value: stats.total_phrases, label: t('stats.total.phrases'), color: tokens.colors.cyan },
+    { value: stats.total_sessions, label: t('stats.total.sessions'), color: tokens.colors.purple },
+    { value: hours > 0 ? `${hours}h${minutes}m` : `${minutes}m`, label: t('stats.total.minutes'), color: tokens.colors.green },
+  ]
+
   return (
     <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', padding: '0 24px 24px', maxWidth: '800px', margin: '0 auto' }}>
       <style>{`
         @keyframes fill { from { width: 0%; } to { width: var(--w); } }
-        @keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
       `}</style>
 
       {/* HEADER */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #1e2d45', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: `1px solid ${tokens.colors.border}`, marginBottom: '24px' }}>
         <div>
-          <div style={{ fontFamily: 'Orbitron, sans-serif', color: '#06b6d4', fontSize: '18px', fontWeight: 700, letterSpacing: '0.1em' }}>GG TRANSLATE</div>
-          <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.15em', marginTop: '2px' }}>{t('stats.title')}</div>
+          <div style={{ fontFamily: tokens.fonts.display, color: tokens.colors.cyan, fontSize: '18px', fontWeight: tokens.fontWeights.bold, letterSpacing: tokens.letterSpacing.wide }}>GG TRANSLATE</div>
+          <div style={{ color: tokens.colors.dim, fontSize: '10px', letterSpacing: tokens.letterSpacing.widest, marginTop: '2px' }}>{t('stats.title')}</div>
         </div>
-        <button onClick={() => navigate('/translate')} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '13px' }}>{t('stats.back')}</button>
+        <button
+          onClick={() => navigate('/translate')}
+          style={{ background: 'transparent', border: 'none', color: tokens.colors.muted, cursor: 'pointer', fontSize: '13px', transition: tokens.transitions.normal }}
+          onMouseEnter={e => e.currentTarget.style.color = tokens.colors.text}
+          onMouseLeave={e => e.currentTarget.style.color = tokens.colors.muted}
+        >
+          {t('stats.back')}
+        </button>
       </div>
 
       {loading ? (
-        <div style={{ color: '#475569', textAlign: 'center', padding: '60px', fontFamily: 'Orbitron, sans-serif', fontSize: '12px' }}>⟳ {t('splash.loading')}</div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{ color: tokens.colors.dim, textAlign: 'center', padding: '60px', fontFamily: tokens.fonts.display, fontSize: '12px' }}
+        >
+          ⟳ {t('splash.loading')}
+        </motion.div>
       ) : (
-        <>
-          {/* STATS PRINCIPALES */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-            <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-              <div style={{ color: '#06b6d4', fontSize: '32px', fontWeight: 700, fontFamily: 'Orbitron, sans-serif' }}>{stats.total_phrases}</div>
-              <div style={{ color: '#475569', fontSize: '11px', marginTop: '6px' }}>{t('stats.total.phrases')}</div>
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* STATS PRINCIPALES */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              {statCards.map((card, i) => (
+                <motion.div
+                  key={card.label}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.08 }}
+                  style={{ background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.xl, padding: '20px', textAlign: 'center' }}
+                >
+                  <div style={{ color: card.color, fontSize: '32px', fontWeight: tokens.fontWeights.bold, fontFamily: tokens.fonts.display }}>{card.value}</div>
+                  <div style={{ color: tokens.colors.dim, fontSize: '11px', marginTop: '6px' }}>{card.label}</div>
+                </motion.div>
+              ))}
             </div>
-            <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-              <div style={{ color: '#a855f7', fontSize: '32px', fontWeight: 700, fontFamily: 'Orbitron, sans-serif' }}>{stats.total_sessions}</div>
-              <div style={{ color: '#475569', fontSize: '11px', marginTop: '6px' }}>{t('stats.total.sessions')}</div>
-            </div>
-            <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-              <div style={{ color: '#22c55e', fontSize: '32px', fontWeight: 700, fontFamily: 'Orbitron, sans-serif' }}>
-                {hours > 0 ? `${hours}h${minutes}m` : `${minutes}m`}
-              </div>
-              <div style={{ color: '#475569', fontSize: '11px', marginTop: '6px' }}>{t('stats.total.minutes')}</div>
-            </div>
-          </div>
 
-          {/* TOP LANGUES */}
-          {stats.top_languages.length > 0 && (
-            <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-              <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em', marginBottom: '16px' }}>{t('stats.top.langs')}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {stats.top_languages.slice(0, 5).map((lang, i) => {
-                  const max = stats.top_languages[0]?.count || 1
-                  const pct = Math.round((lang.count / max) * 100)
-                  return (
-                    <div key={lang.code}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: '#94a3b8', fontSize: '13px' }}>{lang.flag} {lang.name}</span>
-                        <span style={{ color: '#475569', fontSize: '11px' }}>{lang.count} phrases</span>
+            {/* TOP LANGUES */}
+            {stats.top_languages.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.25 }}
+                style={{ background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.xl, padding: '20px', marginBottom: '20px' }}
+              >
+                <div style={{ fontFamily: tokens.fonts.display, fontSize: '11px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide, marginBottom: '16px' }}>{t('stats.top.langs')}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {stats.top_languages.slice(0, 5).map((lang, i) => {
+                    const max = stats.top_languages[0]?.count || 1
+                    const pct = Math.round((lang.count / max) * 100)
+                    const barColor = i === 0 ? tokens.colors.cyan : i === 1 ? tokens.colors.purple : tokens.colors.blue
+                    return (
+                      <div key={lang.code}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: tokens.colors.muted, fontSize: '13px' }}>{lang.flag} {lang.name}</span>
+                          <span style={{ color: tokens.colors.dim, fontSize: '11px' }}>{lang.count} phrases</span>
+                        </div>
+                        <div style={{ background: tokens.colors.bg3, borderRadius: tokens.radius.full, height: '6px', overflow: 'hidden' }}>
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.8, delay: 0.3 + i * 0.1, ease: 'easeOut' }}
+                            style={{ height: '100%', borderRadius: tokens.radius.full, background: barColor }}
+                          />
+                        </div>
                       </div>
-                      <div style={{ background: '#111827', borderRadius: '99px', height: '6px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: '99px', background: i === 0 ? '#06b6d4' : i === 1 ? '#a855f7' : '#3b82f6', width: `${pct}%`, transition: 'width 1s ease' }}/>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
+                    )
+                  })}
+                </div>
+              </motion.div>
+            )}
 
-          {/* TOP JEUX */}
-          {stats.top_games.length > 0 && (
-            <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-              <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em', marginBottom: '16px' }}>{t('stats.top.games')}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                {stats.top_games.slice(0, 6).map(game => (
-                  <div key={game.name} style={{ background: '#111827', border: '1px solid #1e2d45', borderRadius: '10px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '18px' }}>{game.emoji}</span>
-                    <div>
-                      <div style={{ color: '#fff', fontSize: '12px' }}>{game.name}</div>
-                      <div style={{ color: '#475569', fontSize: '10px' }}>{game.count} sessions</div>
-                    </div>
+            {/* TOP JEUX */}
+            {stats.top_games.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.32 }}
+                style={{ background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.xl, padding: '20px', marginBottom: '20px' }}
+              >
+                <div style={{ fontFamily: tokens.fonts.display, fontSize: '11px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide, marginBottom: '16px' }}>{t('stats.top.games')}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                  {stats.top_games.slice(0, 6).map((game, i) => (
+                    <motion.div
+                      key={game.name}
+                      initial={{ opacity: 0, scale: 0.85 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.25, delay: 0.35 + i * 0.06 }}
+                      style={{ background: tokens.colors.bg3, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.lg, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <span style={{ fontSize: '18px' }}>{game.emoji}</span>
+                      <div>
+                        <div style={{ color: tokens.colors.text, fontSize: '12px' }}>{game.name}</div>
+                        <div style={{ color: tokens.colors.dim, fontSize: '10px' }}>{game.count} sessions</div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* ACHIEVEMENTS */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.4 }}
+              style={{ background: tokens.colors.bg2, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.xl, padding: '20px' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ fontFamily: tokens.fonts.display, fontSize: '11px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide }}>🏆 ACHIEVEMENTS</div>
+                <span style={{ color: tokens.colors.dim, fontSize: '11px' }}>{unlockedAchievements.length}/{ACHIEVEMENTS.length}</span>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ background: tokens.colors.bg3, borderRadius: tokens.radius.full, height: '8px', overflow: 'hidden', marginBottom: '20px' }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 1, delay: 0.5, ease: 'easeOut' }}
+                  style={{ height: '100%', borderRadius: tokens.radius.full, background: tokens.gradients.primaryR }}
+                />
+              </div>
+
+              {/* Débloqués */}
+              {unlockedAchievements.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ color: tokens.colors.green, fontSize: '11px', marginBottom: '10px' }}>✅ Débloqués</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
+                    {unlockedAchievements.map((a, i) => (
+                      <motion.div
+                        key={a.id}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.25, delay: 0.55 + i * 0.04, ease: [0.34, 1.56, 0.64, 1] }}
+                        style={{ background: tokens.alpha.greenDim, border: `1px solid rgba(34,197,94,0.3)`, borderRadius: tokens.radius.lg, padding: '12px' }}
+                      >
+                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>{a.emoji}</div>
+                        <div style={{ color: tokens.colors.green, fontSize: '11px', fontWeight: tokens.fontWeights.bold, fontFamily: tokens.fonts.display }}>{a.label}</div>
+                        <div style={{ color: tokens.colors.dim, fontSize: '10px', marginTop: '2px' }}>{a.desc}</div>
+                      </motion.div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ACHIEVEMENTS */}
-          <div style={{ background: '#0d1424', border: '1px solid #1e2d45', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: '#06b6d4', letterSpacing: '0.1em' }}>🏆 ACHIEVEMENTS</div>
-              <span style={{ color: '#475569', fontSize: '11px' }}>{unlockedAchievements.length}/{ACHIEVEMENTS.length}</span>
-            </div>
-            <div style={{ background: '#111827', borderRadius: '99px', height: '8px', overflow: 'hidden', marginBottom: '20px' }}>
-              <div style={{ height: '100%', borderRadius: '99px', background: 'linear-gradient(to right, #3b82f6, #06b6d4)', width: `${progress}%`, transition: 'width 1s ease' }}/>
-            </div>
-
-            {unlockedAchievements.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ color: '#22c55e', fontSize: '11px', marginBottom: '10px' }}>✅ Débloqués</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
-                  {unlockedAchievements.map(a => (
-                    <div key={a.id} style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '10px', padding: '12px', animation: 'pop 0.3s ease' }}>
-                      <div style={{ fontSize: '24px', marginBottom: '4px' }}>{a.emoji}</div>
-                      <div style={{ color: '#22c55e', fontSize: '11px', fontWeight: 700, fontFamily: 'Orbitron, sans-serif' }}>{a.label}</div>
-                      <div style={{ color: '#475569', fontSize: '10px', marginTop: '2px' }}>{a.desc}</div>
-                    </div>
-                  ))}
                 </div>
-              </div>
-            )}
+              )}
 
-            {lockedAchievements.length > 0 && (
-              <div>
-                <div style={{ color: '#334155', fontSize: '11px', marginBottom: '10px' }}>🔒 À débloquer</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
-                  {lockedAchievements.map(a => (
-                    <div key={a.id} style={{ background: '#111827', border: '1px solid #1e2d45', borderRadius: '10px', padding: '12px', opacity: 0.5 }}>
-                      <div style={{ fontSize: '24px', marginBottom: '4px', filter: 'grayscale(1)' }}>{a.emoji}</div>
-                      <div style={{ color: '#475569', fontSize: '11px', fontFamily: 'Orbitron, sans-serif' }}>{a.label}</div>
-                      <div style={{ color: '#334155', fontSize: '10px', marginTop: '2px' }}>{a.desc}</div>
-                    </div>
-                  ))}
+              {/* Verrouillés */}
+              {lockedAchievements.length > 0 && (
+                <div>
+                  <div style={{ color: tokens.colors.veryDim, fontSize: '11px', marginBottom: '10px' }}>🔒 À débloquer</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
+                    {lockedAchievements.map(a => (
+                      <div key={a.id} style={{ background: tokens.colors.bg3, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.radius.lg, padding: '12px', opacity: 0.45 }}>
+                        <div style={{ fontSize: '24px', marginBottom: '4px', filter: 'grayscale(1)' }}>{a.emoji}</div>
+                        <div style={{ color: tokens.colors.dim, fontSize: '11px', fontFamily: tokens.fonts.display }}>{a.label}</div>
+                        <div style={{ color: tokens.colors.veryDim, fontSize: '10px', marginTop: '2px' }}>{a.desc}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {stats.total_phrases === 0 && stats.total_sessions === 0 && (
-              <div style={{ color: '#475569', fontSize: '12px', textAlign: 'center', padding: '20px' }}>
-                {t('stats.no.data')}
-              </div>
-            )}
-          </div>
-        </>
+              {stats.total_phrases === 0 && stats.total_sessions === 0 && (
+                <div style={{ color: tokens.colors.dim, fontSize: '12px', textAlign: 'center', padding: '20px' }}>
+                  {t('stats.no.data')}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
       )}
     </div>
   )

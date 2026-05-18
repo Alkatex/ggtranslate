@@ -49,6 +49,9 @@ function AppRoutes() {
   const location = useLocation()
   const isOCRSelect = location.pathname === '/ocr-select'
 
+  // ─── FIX: Overlay — fond transparent forcé, hors du wrapper principal ────
+  const isOverlay = location.pathname === '/overlay'
+
   useEffect(() => {
     if (authInProgress) return
     authInProgress = true
@@ -129,6 +132,20 @@ function AppRoutes() {
   if (authState === 'loading') return <SplashPage />
 
   if (isOCRSelect) return <OCRSelectPage />
+
+  // ─── FIX: Overlay rendu hors du wrapper — fond forcé transparent ──────────
+  if (isOverlay) {
+    document.body.style.backgroundColor = 'transparent'
+    document.body.style.background = 'transparent'
+    document.documentElement.style.backgroundColor = 'transparent'
+    document.documentElement.style.background = 'transparent'
+    const root = document.getElementById('root')
+    if (root) {
+      root.style.backgroundColor = 'transparent'
+      root.style.background = 'transparent'
+    }
+    return <OverlayPage />
+  }
 
   return (
     <>
