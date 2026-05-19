@@ -17,7 +17,7 @@ import { useAuthStore } from './store/auth'
 import { useThemeStore } from './store/theme'
 import { supabase } from './lib/supabase'
 
-const APP_VERSION = '1.0.4'
+const APP_VERSION = '1.0.6'
 
 let authInProgress = false
 

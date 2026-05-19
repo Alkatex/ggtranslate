@@ -43,6 +43,16 @@ export function StatsPage() {
     if (user) loadStats()
   }, [user])
 
+  // ─── FIX: Recharge les stats quand la fenêtre reprend le focus ────────────
+  // Nécessaire après OCR (mainWindow.hide → show) qui reset les composants
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) loadStats()
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [user])
+
   async function loadStats() {
     if (!user) { setLoading(false); return }
     setLoading(true)
@@ -83,9 +93,6 @@ export function StatsPage() {
 
   return (
     <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', padding: '0 24px 24px', maxWidth: '800px', margin: '0 auto' }}>
-      <style>{`
-        @keyframes fill { from { width: 0%; } to { width: var(--w); } }
-      `}</style>
 
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: `1px solid ${tokens.colors.border}`, marginBottom: '24px' }}>
@@ -98,26 +105,17 @@ export function StatsPage() {
           style={{ background: 'transparent', border: 'none', color: tokens.colors.muted, cursor: 'pointer', fontSize: '13px', transition: tokens.transitions.normal }}
           onMouseEnter={e => e.currentTarget.style.color = tokens.colors.text}
           onMouseLeave={e => e.currentTarget.style.color = tokens.colors.muted}
-        >
-          {t('stats.back')}
-        </button>
+        >{t('stats.back')}</button>
       </div>
 
       {loading ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={{ color: tokens.colors.dim, textAlign: 'center', padding: '60px', fontFamily: tokens.fonts.display, fontSize: '12px' }}
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ color: tokens.colors.dim, textAlign: 'center', padding: '60px', fontFamily: tokens.fonts.display, fontSize: '12px' }}>
           ⟳ {t('splash.loading')}
         </motion.div>
       ) : (
         <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+
             {/* STATS PRINCIPALES */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '20px' }}>
               {statCards.map((card, i) => (
@@ -209,8 +207,6 @@ export function StatsPage() {
                 <div style={{ fontFamily: tokens.fonts.display, fontSize: '11px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide }}>🏆 ACHIEVEMENTS</div>
                 <span style={{ color: tokens.colors.dim, fontSize: '11px' }}>{unlockedAchievements.length}/{ACHIEVEMENTS.length}</span>
               </div>
-
-              {/* Progress bar */}
               <div style={{ background: tokens.colors.bg3, borderRadius: tokens.radius.full, height: '8px', overflow: 'hidden', marginBottom: '20px' }}>
                 <motion.div
                   initial={{ width: 0 }}
@@ -220,7 +216,6 @@ export function StatsPage() {
                 />
               </div>
 
-              {/* Débloqués */}
               {unlockedAchievements.length > 0 && (
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ color: tokens.colors.green, fontSize: '11px', marginBottom: '10px' }}>✅ Débloqués</div>
@@ -242,7 +237,6 @@ export function StatsPage() {
                 </div>
               )}
 
-              {/* Verrouillés */}
               {lockedAchievements.length > 0 && (
                 <div>
                   <div style={{ color: tokens.colors.veryDim, fontSize: '11px', marginBottom: '10px' }}>🔒 À débloquer</div>
@@ -264,6 +258,7 @@ export function StatsPage() {
                 </div>
               )}
             </motion.div>
+
           </motion.div>
         </AnimatePresence>
       )}

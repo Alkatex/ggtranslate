@@ -42,6 +42,14 @@ export function ProfilePage() {
 
   useEffect(() => { loadProfile() }, [])
 
+  // ─── FIX: Recharge le profil quand la fenêtre reprend le focus ───────────
+  // Nécessaire après OCR (mainWindow.hide → show) qui reset avatar/data
+  useEffect(() => {
+    const handleFocus = () => { loadProfile() }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [user])
+
   async function loadProfile() {
     if (!user) return
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
@@ -49,7 +57,7 @@ export function ProfilePage() {
       setUsername(data.username || '')
       setBio(data.bio || '')
       setMainLanguage(data.main_language || 'fr')
-      setAvatarId(data.avatar_id || 0)
+      setAvatarId(data.avatar_id ?? 0)
       setTotalPhrases(data.total_phrases || 0)
       setTotalSessions(data.total_sessions || 0)
     }
@@ -98,9 +106,7 @@ export function ProfilePage() {
           style={{ background: 'transparent', border: 'none', color: tokens.colors.muted, cursor: 'pointer', fontSize: '13px', transition: tokens.transitions.normal }}
           onMouseEnter={e => e.currentTarget.style.color = tokens.colors.text}
           onMouseLeave={e => e.currentTarget.style.color = tokens.colors.muted}
-        >
-          {t('profile.back')}
-        </button>
+        >{t('profile.back')}</button>
       </motion.div>
 
       {/* AVATAR + INFO */}
@@ -201,7 +207,6 @@ export function ProfilePage() {
       >
         <div style={{ fontFamily: tokens.fonts.display, fontSize: '11px', color: tokens.colors.cyan, letterSpacing: tokens.letterSpacing.wide, marginBottom: '20px' }}>{t('profile.edit')}</div>
 
-        {/* USERNAME */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ color: tokens.colors.muted, fontSize: '12px', marginBottom: '8px' }}>{t('profile.username')}</div>
           <input
@@ -216,7 +221,6 @@ export function ProfilePage() {
           <div style={{ color: tokens.colors.veryDim, fontSize: '10px', marginTop: '4px' }}>{username.length}/30</div>
         </div>
 
-        {/* BIO */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ color: tokens.colors.muted, fontSize: '12px', marginBottom: '8px' }}>{t('profile.bio')}</div>
           <textarea
@@ -232,7 +236,6 @@ export function ProfilePage() {
           <div style={{ color: tokens.colors.veryDim, fontSize: '10px', marginTop: '4px' }}>{bio.length}/150</div>
         </div>
 
-        {/* LANGUE */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{ color: tokens.colors.muted, fontSize: '12px', marginBottom: '8px' }}>{t('profile.lang')}</div>
           <select
@@ -244,7 +247,6 @@ export function ProfilePage() {
           </select>
         </div>
 
-        {/* BOUTON SAVE */}
         <motion.button
           whileHover={isSaving ? {} : { scale: 1.01 }}
           whileTap={isSaving ? {} : { scale: 0.98 }}
@@ -255,7 +257,6 @@ export function ProfilePage() {
           {isSaving ? t('profile.saving') : t('profile.save')}
         </motion.button>
 
-        {/* MESSAGE SAVE */}
         <AnimatePresence>
           {saveMsg && (
             <motion.div

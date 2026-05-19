@@ -24,13 +24,11 @@ export function OverlayPage() {
         const updated = [...prev, { ...data, id }]
         return updated.slice(-5)
       })
-
       const t = setTimeout(() => {
         setTranslations(prev => prev.filter(tr => tr.id !== id))
       }, 6000)
       timeoutsRef.current.push(t)
     })
-
     return () => {
       window.electron.overlay?.removeListeners()
       timeoutsRef.current.forEach(t => clearTimeout(t))
@@ -55,19 +53,20 @@ export function OverlayPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body, #root{ background: transparent !important; }
+        html, body, #root { background: transparent !important; }
         ::-webkit-scrollbar { display: none; }
       `}</style>
 
       <div style={{ position: 'fixed', width: '300px', ...positionStyles[position] }}>
 
-        {/* ─── HANDLE — quasi transparent ───────────────────────────────────── */}
+        {/* ─── HANDLE ──────────────────────────────────────────────────────── */}
         <div
           style={{
-            background: 'rgba(0,0,0,0.15)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            border: '1px solid rgba(6,182,212,0.2)',
+            // ─── FIX: Fond semi-transparent — visible mais laisse voir à travers
+            background: 'rgba(6,10,22,0.72)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(6,182,212,0.35)',
             borderRadius: '10px 10px 0 0',
             padding: '5px 8px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -82,7 +81,6 @@ export function OverlayPage() {
               GG TRANSLATE
             </span>
           </div>
-
           <div style={{ display: 'flex', gap: '3px', WebkitAppRegion: 'no-drag' } as any}>
             {corners.map(corner => (
               <button
@@ -90,14 +88,11 @@ export function OverlayPage() {
                 onClick={() => setPosition(corner)}
                 title={corner}
                 style={{
-                  background: position === corner ? 'rgba(6,182,212,0.2)' : 'transparent',
-                  border: `1px solid ${position === corner ? tokens.colors.cyan : 'rgba(6,182,212,0.2)'}`,
-                  color: tokens.colors.cyan,
-                  cursor: 'pointer',
-                  width: '16px', height: '16px',
-                  borderRadius: '3px', fontSize: '8px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: 0,
+                  background: position === corner ? 'rgba(6,182,212,0.25)' : 'transparent',
+                  border: `1px solid ${position === corner ? tokens.colors.cyan : 'rgba(6,182,212,0.25)'}`,
+                  color: tokens.colors.cyan, cursor: 'pointer',
+                  width: '16px', height: '16px', borderRadius: '3px', fontSize: '8px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
                   transition: tokens.transitions.fast,
                 }}
               >
@@ -110,8 +105,7 @@ export function OverlayPage() {
                 background: 'transparent', border: 'none',
                 color: tokens.colors.dim, cursor: 'pointer', fontSize: '13px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '16px', height: '16px',
-                transition: tokens.transitions.fast,
+                width: '16px', height: '16px', transition: tokens.transitions.fast,
                 WebkitAppRegion: 'no-drag',
               } as any}
               onMouseEnter={e => e.currentTarget.style.color = tokens.colors.red}
@@ -120,7 +114,7 @@ export function OverlayPage() {
           </div>
         </div>
 
-        {/* ─── TRADUCTIONS — AnimatePresence ────────────────────────────────── */}
+        {/* ─── TRADUCTIONS ─────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
           <AnimatePresence mode="popLayout">
             {translations.length === 0 ? (
@@ -131,16 +125,14 @@ export function OverlayPage() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 style={{
-                  background: 'rgba(0,0,0,0.15)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  color: tokens.colors.dim,
-                  fontSize: '11px',
-                  fontFamily: tokens.fonts.display,
-                  textAlign: 'center',
+                  // ─── FIX: Fond semi-transparent lisible
+                  background: 'rgba(6,10,22,0.65)',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px', padding: '8px 12px',
+                  color: tokens.colors.dim, fontSize: '11px',
+                  fontFamily: tokens.fonts.display, textAlign: 'center',
                   letterSpacing: tokens.letterSpacing.tight,
                 } as any}
               >
@@ -155,14 +147,15 @@ export function OverlayPage() {
                   exit={{ opacity: 0, x: isRight ? 20 : -20, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.0, 0.0, 0.2, 1] }}
                   style={{
+                    // ─── FIX: Semi-transparent avec teinte couleur — lisible par-dessus jeu
                     background: tr.type === 'my'
-                      ? 'rgba(6,182,212,0.08)'
-                      : 'rgba(168,85,247,0.08)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
+                      ? 'rgba(6,10,22,0.72)'
+                      : 'rgba(6,10,22,0.72)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
                     border: `1px solid ${tr.type === 'my'
-                      ? 'rgba(6,182,212,0.25)'
-                      : 'rgba(168,85,247,0.25)'}`,
+                      ? 'rgba(6,182,212,0.5)'
+                      : 'rgba(168,85,247,0.5)'}`,
                     borderRadius: '8px',
                     padding: '7px 10px',
                     borderLeft: `3px solid ${tr.type === 'my' ? tokens.colors.cyan : tokens.colors.purple}`,
@@ -170,22 +163,17 @@ export function OverlayPage() {
                 >
                   <div style={{
                     color: tr.type === 'my' ? tokens.colors.cyan : tokens.colors.purple,
-                    fontSize: '13px',
-                    fontWeight: tokens.fontWeights.medium,
-                    marginBottom: '3px',
-                    lineHeight: 1.4,
+                    fontSize: '13px', fontWeight: tokens.fontWeights.medium,
+                    marginBottom: '3px', lineHeight: 1.4,
                   }}>
                     {tr.translated}
                   </div>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: '5px',
-                    color: tokens.colors.dim, fontSize: '10px',
-                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: tokens.colors.muted, fontSize: '10px' }}>
                     <span style={{ fontSize: '9px' }}>{tr.type === 'my' ? '🎤' : '🖥️'}</span>
                     <span style={{ opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
                       {tr.original}
                     </span>
-                    <span style={{ marginLeft: 'auto', fontSize: '9px', flexShrink: 0, color: tokens.colors.veryDim }}>
+                    <span style={{ marginLeft: 'auto', fontSize: '9px', flexShrink: 0, color: tokens.colors.dim }}>
                       {tr.timestamp}
                     </span>
                   </div>
