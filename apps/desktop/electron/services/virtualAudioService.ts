@@ -1,14 +1,14 @@
 import * as path from 'path'
+import { app } from 'electron'
 
 let virtualAudioAddon: any = null
 
 function loadAddon() {
   if (virtualAudioAddon) return virtualAudioAddon
   try {
-    const addonPath = path.join(
-      __dirname,
-      '../native/virtual-audio-device/build/Release/virtual_audio_device.node'
-    )
+    const addonPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'native/virtual-audio-device/virtual_audio_device.node')
+      : path.join(__dirname, '../native/virtual-audio-device/build/Release/virtual_audio_device.node')
     console.log('🔍 Virtual Audio addon path:', addonPath)
     virtualAudioAddon = require(addonPath)
     console.log('✅ Virtual Audio Device addon chargé')

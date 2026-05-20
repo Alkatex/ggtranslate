@@ -219,6 +219,21 @@ ipcMain.on('overlay:translation', (_event, data) => {
   if (overlayWindow) overlayWindow.webContents.send('overlay:translation', data)
 })
 
+// ─── Helper: rend la fenêtre principale invisible sans suspendre le renderer ──
+function hideMainWindow() {
+  if (!mainWindow) return
+  mainWindow.setOpacity(0)
+  mainWindow.setIgnoreMouseEvents(true)
+}
+
+// ─── Helper: restaure la fenêtre principale ───────────────────────────────────
+function showMainWindow() {
+  if (!mainWindow) return
+  mainWindow.setOpacity(1)
+  mainWindow.setIgnoreMouseEvents(false)
+  mainWindow.show()
+}
+
 function createSelectionWindow() {
   if (selectionWindow) return
   const displays = screen.getAllDisplays()
@@ -241,8 +256,8 @@ function createSelectionWindow() {
   else { selectionWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/ocr-select' }) }
   selectionWindow.on('closed', () => {
     selectionWindow = null
-    // ─── FIX: Si fermée sans sélection → réaffiche la fenêtre principale ────
-    if (mainWindow) mainWindow.show()
+    // ─── FIX: Restaure la fenêtre principale sans suspendre le renderer ───────
+    showMainWindow()
   })
 }
 
@@ -252,29 +267,27 @@ function closeSelectionWindow() {
 
 ipcMain.handle('ocr:init', async () => { await initOCR(); return { success: true } })
 
-// ─── FIX: Cache la fenêtre principale AVANT d'ouvrir la sélection ────────────
+// ─── FIX: setOpacity(0) au lieu de hide() — évite la suspension du renderer ──
+// hide() suspend Electron → Supabase perd la session JWT → stats/profile à 0
 ipcMain.handle('ocr:openSelection', async () => {
-  if (mainWindow) {
-    mainWindow.hide()
-    await new Promise(resolve => setTimeout(resolve, 200))
-  }
+  hideMainWindow()
+  await new Promise(resolve => setTimeout(resolve, 100))
   createSelectionWindow()
   return { success: true }
 })
 
-// ─── FIX: Réaffiche la fenêtre principale si annulation ──────────────────────
+// ─── FIX: showMainWindow() restaure opacity + mouseEvents ─────────────────────
 ipcMain.handle('ocr:closeSelection', () => {
   closeSelectionWindow()
-  if (mainWindow) mainWindow.show()
+  showMainWindow()
   return { success: true }
 })
 
-// ─── FIX: Plus besoin de hide/show ici — déjà géré dans openSelection ────────
 ipcMain.handle('ocr:zoneSelected', async (_event, zone) => {
   closeSelectionWindow()
-  await new Promise(resolve => setTimeout(resolve, 300))
+  await new Promise(resolve => setTimeout(resolve, 200))
+  showMainWindow()
   if (mainWindow) {
-    mainWindow.show()
     mainWindow.webContents.send('ocr:capturing', true)
   }
   await startCapture(zone, (buffer) => {

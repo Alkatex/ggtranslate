@@ -1,4 +1,4 @@
-import { applyVoiceEffectWorker } from './dspWorkerClient'
+import { applyVoiceEffect } from './voiceEffects'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://ggtranslatebackend-production.up.railway.app'
 
@@ -221,18 +221,10 @@ async function playAudio(
   // Loudness normalization
   audioBuffer = normalizeLoudness(audioBuffer)
 
-  // ─── FIX: timeout 4s + fallback sans effet si Worker échoue ──────────────
   try {
-    audioBuffer = await Promise.race([
-      applyVoiceEffectWorker(audioBuffer, effectId),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('DSP Worker timeout après 4s')), 4000)
-      ),
-    ])
-    console.log('✅ Effet DSP appliqué:', effectId)
+    audioBuffer = await applyVoiceEffect(audioBuffer, effectId)
   } catch (err) {
-    console.warn('⚠️ DSP Worker failed — lecture sans effet:', err)
-    // Continue avec audioBuffer non modifié — on entend quand même la voix
+    console.warn('⚠️ DSP failed — lecture sans effet:', err)
   }
 
   // Silence padding

@@ -1,15 +1,16 @@
 import * as path from 'path'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
 
 let captureAddon: any = null
 
 function loadAddon() {
   if (captureAddon) return captureAddon
   try {
-    const addonPath = path.join(
-      __dirname,
-      '../native/loopback-capture/build/Release/loopback_capture.node'
-    )
+    // En production, extraResources place les .node dans resources/native/...
+    // En dev, ils sont dans electron/native/...
+    const addonPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'native/loopback-capture/loopback_capture.node')
+      : path.join(__dirname, '../native/loopback-capture/build/Release/loopback_capture.node')
     console.log('🔍 Addon path:', addonPath)
     captureAddon = require(addonPath)
     console.log('✅ Loopback capture addon chargé')

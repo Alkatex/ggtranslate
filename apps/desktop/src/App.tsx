@@ -53,6 +53,9 @@ function AppRoutes() {
   const isOverlay = location.pathname === '/overlay'
 
   useEffect(() => {
+    // La fenêtre OCR Select n'a pas besoin d'auth — évite toute interférence avec la session
+    if (isOCRSelect) return
+
     if (authInProgress) return
     authInProgress = true
 
@@ -108,8 +111,10 @@ function AppRoutes() {
         }
 
         if (event === 'TOKEN_REFRESHED' && session) {
+          const currentUser = useAuthStore.getState().user
           useAuthStore.setState({
-            user: session.user,
+            // Conserve la même référence objet si c'est le même user — évite le re-render de Stats/Profile
+            user: currentUser?.id === session.user.id ? currentUser : session.user,
             session,
             isAuthenticated: true,
           })
@@ -129,11 +134,9 @@ function AppRoutes() {
     return () => subscription.unsubscribe()
   }, [])
 
-  if (authState === 'loading') return <SplashPage />
-
+  // Ces fenêtres secondaires n'ont pas besoin d'attendre l'auth — à vérifier en premier
   if (isOCRSelect) return <OCRSelectPage />
 
-  // ─── FIX: Overlay rendu hors du wrapper — fond forcé transparent ──────────
   if (isOverlay) {
     document.body.style.backgroundColor = 'transparent'
     document.body.style.background = 'transparent'
@@ -146,6 +149,8 @@ function AppRoutes() {
     }
     return <OverlayPage />
   }
+
+  if (authState === 'loading') return <SplashPage />
 
   return (
     <>

@@ -136,20 +136,21 @@ export function GroupsPage() {
 
   async function createGroup() {
     if (!groupName.trim() || !user) return
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setSuccess('')
     const code = generateCode(groupName)
     const { data: group, error: groupError } = await supabase.from('groups').insert({ name: groupName.trim(), code, is_public: isPublic, owner_id: user.id, max_members: 8, last_activity_at: new Date().toISOString() }).select().single()
     if (groupError) { setError('Erreur lors de la création du groupe'); setLoading(false); return }
     await supabase.from('group_members').insert({ group_id: group.id, user_id: user.id, language: selectedLang })
     setSuccess(`✅ Groupe créé ! Code: ${code}`)
+    setTimeout(() => setSuccess(''), 5000)
     setGroupName(''); setShowCreate(false); setActiveGroup(group)
-    loadPublicGroups(); loadMyGroups(); setLoading(false)
+    await loadPublicGroups(); await loadMyGroups(); setLoading(false)
   }
 
   async function joinGroup(code?: string) {
     const codeToUse = (code || joinCode).trim().toUpperCase()
     if (!codeToUse || !user) return
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setSuccess('')
     const { data: group, error: groupError } = await supabase.from('groups').select('*').eq('code', codeToUse).maybeSingle()
     if (groupError) { setError('Erreur lors de la recherche du groupe'); setLoading(false); return }
     if (!group) { setError(`Code invalide : "${codeToUse}" — vérifie le code et réessaie`); setLoading(false); return }
@@ -157,7 +158,9 @@ export function GroupsPage() {
     if (!existing) await supabase.from('group_members').insert({ group_id: group.id, user_id: user.id, language: selectedLang })
     await supabase.from('groups').update({ last_activity_at: new Date().toISOString() }).eq('id', group.id)
     setActiveGroup(group); setJoinCode(''); setShowJoin(false)
-    setSuccess(`✅ Rejoint ${group.name} !`); loadMyGroups(); setLoading(false)
+    setSuccess(`✅ Rejoint ${group.name} !`)
+    setTimeout(() => setSuccess(''), 5000)
+    await loadMyGroups(); setLoading(false)
   }
 
   async function deleteGroup(groupId: string) {
@@ -386,12 +389,12 @@ export function GroupsPage() {
       >
         <motion.button
           whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-          onClick={() => { setShowCreate(!showCreate); setShowJoin(false) }}
+          onClick={() => { setShowCreate(!showCreate); setShowJoin(false); setError(''); setSuccess('') }}
           style={{ flex: 1, background: showCreate ? tokens.gradients.primaryR : 'transparent', border: showCreate ? 'none' : `1px solid ${tokens.colors.border}`, color: tokens.colors.white, padding: '14px', borderRadius: tokens.radius.lg, cursor: 'pointer', fontSize: '14px', fontFamily: tokens.fonts.display, fontWeight: tokens.fontWeights.bold }}
         >{t('groups.create')}</motion.button>
         <motion.button
           whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-          onClick={() => { setShowJoin(!showJoin); setShowCreate(false) }}
+          onClick={() => { setShowJoin(!showJoin); setShowCreate(false); setError(''); setSuccess('') }}
           style={{ flex: 1, background: showJoin ? tokens.alpha.cyanMid : 'transparent', border: `1px solid ${showJoin ? tokens.colors.cyan : tokens.colors.border}`, color: tokens.colors.white, padding: '14px', borderRadius: tokens.radius.lg, cursor: 'pointer', fontSize: '14px', fontFamily: tokens.fonts.display }}
         >{t('groups.join')}</motion.button>
       </motion.div>

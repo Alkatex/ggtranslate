@@ -330,6 +330,10 @@ export function TranslatePage() {
 
   const toggleLive = async () => {
     if (liveState === 'inactive') {
+      if (secondsRemaining === 0 && plan !== 'pro') {
+        setShowUpgradePopup(true)
+        return
+      }
       sessionStartRef.current = Date.now()
       setCurrentTranscript(''); currentTranscriptRef.current = ''; setErrorMsg('')
       const { user } = useAuthStore.getState()

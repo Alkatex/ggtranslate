@@ -42,7 +42,6 @@ interface FallingFlag {
 
 export function SplashPage() {
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuthStore()
   const [flags, setFlags] = useState<FallingFlag[]>([])
   const [fillLevel, setFillLevel] = useState(0)
   const [done, setDone] = useState(false)
@@ -68,7 +67,8 @@ export function SplashPage() {
         setTimeout(() => {
           setDone(true)
           setTimeout(() => {
-            if (isAuthenticated) {
+            // Lit la valeur courante du store — évite le stale closure
+            if (useAuthStore.getState().isAuthenticated) {
               navigate('/translate')
             } else {
               navigate('/onboarding')

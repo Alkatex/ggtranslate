@@ -7,10 +7,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Supabase URL ou clé manquante dans .env')
 }
 
+// La fenêtre OCR select est une fenêtre secondaire — elle ne doit pas écrire dans
+// le localStorage ni rafraîchir le token, sinon ça déclenche SIGNED_IN/TOKEN_REFRESHED
+// dans la fenêtre principale et corrompt l'état Stats/Profile.
+const isSecondaryWindow = typeof window !== 'undefined'
+  && (window.location.hash.startsWith('#/ocr-select') || window.location.hash.startsWith('#/overlay'))
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: !isSecondaryWindow,
+    autoRefreshToken: !isSecondaryWindow,
     detectSessionInUrl: false,
   }
 })
