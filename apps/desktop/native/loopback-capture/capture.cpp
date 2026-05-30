@@ -8,8 +8,10 @@
 #include <thread>
 #include <atomic>
 #include <set>
+#include <algorithm>
 
 #define REFTIMES_PER_SEC 10000000
+#define DST_SAMPLE_RATE 16000
 
 class LoopbackCapture {
 public:
@@ -17,6 +19,8 @@ public:
     std::thread captureThread;
     Napi::ThreadSafeFunction tsfn;
     DWORD excludePID = 0;
+    UINT32 srcSampleRate = 48000;
+    UINT32 numChannels = 2;
 
     void Start(DWORD excPID, Napi::ThreadSafeFunction fn) {
         excludePID = excPID;
@@ -31,36 +35,6 @@ public:
         tsfn.Release();
     }
 
-    // Vérifie si un chunk audio vient du PID exclu
-    bool IsFromExcludedPID(IAudioSessionManager2* pSessionManager) {
-        if (excludePID == 0) return false;
-        
-        IAudioSessionEnumerator* pSessionEnum = nullptr;
-        if (FAILED(pSessionManager->GetSessionEnumerator(&pSessionEnum))) return false;
-
-        int sessionCount = 0;
-        pSessionEnum->GetCount(&sessionCount);
-
-        bool found = false;
-        for (int i = 0; i < sessionCount; i++) {
-            IAudioSessionControl* pSessionControl = nullptr;
-            if (FAILED(pSessionEnum->GetSession(i, &pSessionControl))) continue;
-
-            IAudioSessionControl2* pSessionControl2 = nullptr;
-            if (SUCCEEDED(pSessionControl->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&pSessionControl2))) {
-                DWORD pid = 0;
-                if (SUCCEEDED(pSessionControl2->GetProcessId(&pid)) && pid == excludePID) {
-                    found = true;
-                }
-                pSessionControl2->Release();
-            }
-            pSessionControl->Release();
-            if (found) break;
-        }
-        pSessionEnum->Release();
-        return found;
-    }
-
     void CaptureLoop() {
         HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         if (FAILED(hr)) return;
@@ -69,7 +43,6 @@ public:
         IMMDevice* pDevice = nullptr;
         IAudioClient* pAudioClient = nullptr;
         IAudioCaptureClient* pCaptureClient = nullptr;
-        IAudioSessionManager2* pSessionManager = nullptr;
 
         hr = CoCreateInstance(
             __uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
@@ -77,24 +50,20 @@ public:
         );
         if (FAILED(hr)) { CoUninitialize(); return; }
 
+        // ─── Capture le périphérique de lecture par défaut (loopback) ─────────
         hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
         if (FAILED(hr)) { pEnumerator->Release(); CoUninitialize(); return; }
 
-        // Obtenir le session manager pour filtrer par PID
-        pDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr, (void**)&pSessionManager);
-
         hr = pDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&pAudioClient);
-        if (FAILED(hr)) { 
-            if (pSessionManager) pSessionManager->Release();
-            pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; 
-        }
+        if (FAILED(hr)) { pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; }
 
         WAVEFORMATEX* pwfx = nullptr;
         hr = pAudioClient->GetMixFormat(&pwfx);
-        if (FAILED(hr)) { 
-            if (pSessionManager) pSessionManager->Release();
-            pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; 
-        }
+        if (FAILED(hr)) { pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; }
+
+        // ─── Sauvegarde du format source ───────────────────────────────────────
+        srcSampleRate = pwfx->nSamplesPerSec;
+        numChannels   = pwfx->nChannels;
 
         hr = pAudioClient->Initialize(
             AUDCLNT_SHAREMODE_SHARED,
@@ -103,26 +72,17 @@ public:
         );
         CoTaskMemFree(pwfx);
 
-        if (FAILED(hr)) {
-            if (pSessionManager) pSessionManager->Release();
-            pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return;
-        }
+        if (FAILED(hr)) { pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; }
 
         hr = pAudioClient->GetService(__uuidof(IAudioCaptureClient), (void**)&pCaptureClient);
-        if (FAILED(hr)) {
-            if (pSessionManager) pSessionManager->Release();
-            pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return;
-        }
+        if (FAILED(hr)) { pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; }
 
         hr = pAudioClient->Start();
-        if (FAILED(hr)) {
-            if (pSessionManager) pSessionManager->Release();
-            pCaptureClient->Release(); pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return;
-        }
+        if (FAILED(hr)) { pCaptureClient->Release(); pAudioClient->Release(); pDevice->Release(); pEnumerator->Release(); CoUninitialize(); return; }
 
-        // Track des frames envoyées pour détecter si c'est du TTS
-        UINT64 lastExcludedFrame = 0;
-        UINT64 currentFrame = 0;
+        // ─── Buffer de resampling inter-chunk ──────────────────────────────────
+        // Accumule les samples mono float pour un resampling précis sur la frontière
+        std::vector<float> monoAccum;
 
         while (isRunning) {
             Sleep(10);
@@ -135,32 +95,69 @@ public:
                 BYTE* pData = nullptr;
                 UINT32 numFramesAvailable = 0;
                 DWORD flags = 0;
-                UINT64 devicePosition = 0;
 
-                hr = pCaptureClient->GetBuffer(&pData, &numFramesAvailable, &flags, &devicePosition, nullptr);
+                hr = pCaptureClient->GetBuffer(&pData, &numFramesAvailable, &flags, nullptr, nullptr);
                 if (FAILED(hr)) break;
 
-                currentFrame += numFramesAvailable;
-
-                if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && pData != nullptr) {
+                if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && pData != nullptr && numFramesAvailable > 0) {
                     float* floatData = reinterpret_cast<float*>(pData);
-                    std::vector<int16_t> pcm16(numFramesAvailable);
 
+                    // ─── Mixage multi-canaux → mono float ───────────────────────
                     for (UINT32 i = 0; i < numFramesAvailable; i++) {
-                        float left  = floatData[i * 2];
-                        float right = floatData[i * 2 + 1];
-                        float mono  = (left + right) / 2.0f;
-                        if (mono > 1.0f) mono = 1.0f;
-                        if (mono < -1.0f) mono = -1.0f;
-                        pcm16[i] = static_cast<int16_t>(mono * 32767);
+                        float mono = 0.0f;
+                        for (UINT32 ch = 0; ch < numChannels; ch++) {
+                            mono += floatData[i * numChannels + ch];
+                        }
+                        mono /= (float)numChannels;
+                        mono = (mono > 1.0f) ? 1.0f : (mono < -1.0f ? -1.0f : mono);
+                        monoAccum.push_back(mono);
                     }
 
-                    std::vector<int16_t>* heapData = new std::vector<int16_t>(pcm16);
-                    tsfn.NonBlockingCall(heapData, [](Napi::Env env, Napi::Function jsCallback, std::vector<int16_t>* data) {
-                        auto buffer = Napi::Buffer<int16_t>::Copy(env, data->data(), data->size());
-                        jsCallback.Call({buffer});
-                        delete data;
-                    });
+                    // ─── Resampling vers 16000 Hz si nécessaire ─────────────────
+                    if (srcSampleRate != DST_SAMPLE_RATE) {
+                        double ratio = (double)srcSampleRate / DST_SAMPLE_RATE;
+                        UINT32 dstFrames = (UINT32)(monoAccum.size() / ratio);
+
+                        if (dstFrames > 0) {
+                            std::vector<int16_t>* heapData = new std::vector<int16_t>(dstFrames);
+
+                            for (UINT32 j = 0; j < dstFrames; j++) {
+                                double srcIdx = (double)j * ratio;
+                                UINT32 idx0 = (UINT32)srcIdx;
+                                UINT32 idx1 = idx0 + 1 < (UINT32)monoAccum.size() ? idx0 + 1 : idx0;
+                                double frac = srcIdx - idx0;
+                                float sample = (float)(monoAccum[idx0] * (1.0 - frac) + monoAccum[idx1] * frac);
+                                (*heapData)[j] = static_cast<int16_t>(sample * 32767.0f);
+                            }
+
+                            // Garde les samples non encore consommés
+                            UINT32 consumedSrc = (UINT32)((double)dstFrames * ratio);
+                            if (consumedSrc < (UINT32)monoAccum.size()) {
+                                monoAccum = std::vector<float>(monoAccum.begin() + consumedSrc, monoAccum.end());
+                            } else {
+                                monoAccum.clear();
+                            }
+
+                            tsfn.NonBlockingCall(heapData, [](Napi::Env env, Napi::Function jsCallback, std::vector<int16_t>* data) {
+                                auto buffer = Napi::Buffer<int16_t>::Copy(env, data->data(), data->size());
+                                jsCallback.Call({buffer});
+                                delete data;
+                            });
+                        }
+                    } else {
+                        // Déjà à 16000 Hz — conversion directe
+                        std::vector<int16_t>* heapData = new std::vector<int16_t>(monoAccum.size());
+                        for (UINT32 i = 0; i < (UINT32)monoAccum.size(); i++) {
+                            (*heapData)[i] = static_cast<int16_t>(monoAccum[i] * 32767.0f);
+                        }
+                        monoAccum.clear();
+
+                        tsfn.NonBlockingCall(heapData, [](Napi::Env env, Napi::Function jsCallback, std::vector<int16_t>* data) {
+                            auto buffer = Napi::Buffer<int16_t>::Copy(env, data->data(), data->size());
+                            jsCallback.Call({buffer});
+                            delete data;
+                        });
+                    }
                 }
 
                 hr = pCaptureClient->ReleaseBuffer(numFramesAvailable);
@@ -172,8 +169,10 @@ public:
         }
 
         pAudioClient->Stop();
-        if (pSessionManager) pSessionManager->Release();
-        pCaptureClient->Release(); pAudioClient->Release(); pDevice->Release(); pEnumerator->Release();
+        pCaptureClient->Release();
+        pAudioClient->Release();
+        pDevice->Release();
+        pEnumerator->Release();
         CoUninitialize();
     }
 };

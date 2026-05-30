@@ -331,6 +331,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(['media', 'audioCapture', 'desktopCapture'].includes(permission))
   })
+
   createWindow()
   startGameDetection()
   if (!isDev) setupAutoUpdater(mainWindow!)

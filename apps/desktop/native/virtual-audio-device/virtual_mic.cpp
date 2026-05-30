@@ -1,5 +1,6 @@
 #include <napi.h>
 #include <algorithm>
+#define NOMINMAX
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>

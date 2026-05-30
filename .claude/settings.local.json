@@ -3,7 +3,15 @@
     "allow": [
       "Bash(npx tsc *)",
       "Skill(anthropic-skills:consolidate-memory)",
-      "Skill(anthropic-skills:consolidate-memory:*)"
+      "Skill(anthropic-skills:consolidate-memory:*)",
+      "Bash(python3 -c \"import sys,json; data=json.loads\\(sys.stdin.read\\(\\)\\); print\\(data['content'][:5000]\\)\")",
+      "Bash(node -e \"const chunks=[]; process.stdin.on\\('data',c=>chunks.push\\(c\\)\\); process.stdin.on\\('end',\\(\\)=>{const data=JSON.parse\\(chunks.join\\(''\\)\\); console.log\\(data.content.length\\);}\\)\")",
+      "Bash(node -e \"const chunks=[]; process.stdin.on\\('data',c=>chunks.push\\(c\\)\\); process.stdin.on\\('end',\\(\\)=>{const data=JSON.parse\\(chunks.join\\(''\\)\\); require\\('fs'\\).writeFileSync\\('C:/Users/Marco/AppData/Local/Temp/landing_original.html', data.content\\);}\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node-gyp rebuild *)",
+      "Bash(npx --version)",
+      "Bash(npx node-gyp *)",
+      "Bash(git add *)"
     ]
   }
 }

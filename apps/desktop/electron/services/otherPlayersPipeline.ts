@@ -3,6 +3,26 @@ import { startOtherPlayersCapture, stopOtherPlayersCapture } from './otherPlayer
 import { Deepgram } from '@deepgram/sdk'
 import { BrowserWindow } from 'electron'
 
+// ─── Traduction via Node.js fetch — aucune restriction CORS ───────────────────
+const RAILWAY_BACKEND = 'https://ggtranslatebackend-production.up.railway.app'
+
+async function translateInMain(text: string, sourceLang: string, targetLang: string): Promise<string> {
+  if (!text.trim() || sourceLang === targetLang) return text
+  try {
+    const res = await fetch(`${RAILWAY_BACKEND}/ai/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, sourceLang, targetLang }),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json() as any
+    return data.translated || data.translatedText || text
+  } catch (err) {
+    console.error('❌ Traduction main process échouée:', err)
+    return text
+  }
+}
+
 interface OtherPlayersPipelineConfig {
   win: BrowserWindow
   language: string
@@ -96,6 +116,17 @@ export async function startOtherPlayersPipeline(
             text: transcript,
             isFinal: data.is_final,
           })
+
+          // ─── Traduction dans le process principal (pas de CORS) ───────────
+          if (data.is_final) {
+            translateInMain(transcript, config.language, config.targetLang)
+              .then(translated => {
+                if (isRunning && config.win && !config.win.isDestroyed()) {
+                  config.win.webContents.send('other-players:translated', translated)
+                }
+              })
+              .catch(err => console.error('Erreur traduction Other Players:', err))
+          }
         }
       }
     } catch (e) {

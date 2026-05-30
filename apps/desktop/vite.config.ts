@@ -37,7 +37,11 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
-      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL),
+      'import.meta.env.VITE_API_URL': JSON.stringify(
+        mode === 'development'
+          ? 'http://localhost:5173/railway'
+          : env.VITE_API_URL
+      ),
     },
     resolve: {
       alias: {
@@ -66,6 +70,13 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
+      proxy: {
+        '/railway': {
+          target: 'https://ggtranslatebackend-production.up.railway.app',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/railway/, ''),
+        },
+      },
     },
   }
 })

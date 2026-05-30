@@ -1,4 +1,3 @@
-import { translateText } from './translation'
 import { speakOtherPlayers } from './tts'
 
 export type OtherPlayersState = 'inactive' | 'listening' | 'processing' | 'error'
@@ -15,9 +14,6 @@ export interface OtherPlayersConfig {
 }
 
 let current: OtherPlayersConfig | null = null
-let lastTranslatedText = ''
-let pendingTranslation: Promise<string> | null = null
-let lastInterimText = ''
 let ttsEnabled = true // ← toggle TTS autres joueurs
 
 // ← Export pour toggle depuis Translate.tsx sans redémarrer le pipeline
@@ -43,9 +39,6 @@ export async function startOtherPlayers(config: OtherPlayersConfig): Promise<voi
 
   stopOtherPlayers()
   current = config
-  lastTranslatedText = ''
-  lastInterimText = ''
-  pendingTranslation = null
   const op = window.electron.otherPlayers
 
   op.removeListeners()
@@ -60,54 +53,25 @@ export async function startOtherPlayers(config: OtherPlayersConfig): Promise<voi
     current?.onStateChange('error')
   })
 
-  op.onTranscript(async (data) => {
+  op.onTranscript((data) => {
     if (!current) return
-    const cfg = current
     const text = data.text.trim()
     if (!text) return
-
+    // Affiche le transcript dans l'UI (la traduction arrive via onTranslated)
     current.onTranscript(data.text, data.isFinal)
-
-    if (!data.isFinal) {
-      if (text !== lastInterimText && text.split(' ').length >= 4) {
-        lastInterimText = text
-        pendingTranslation = translateText(text, cfg.sourceLang, cfg.targetLang)
-          .catch(() => '')
-      }
-    } else {
-      if (text === lastTranslatedText) return
-      lastTranslatedText = text
-
-      try {
-        let translated: string
-
-        if (pendingTranslation && lastInterimText && text.startsWith(lastInterimText.substring(0, 20))) {
-          translated = await pendingTranslation
-        } else {
-          translated = await translateText(text, cfg.sourceLang, cfg.targetLang)
-        }
-
-        pendingTranslation = null
-        lastInterimText = ''
-
-        if (!current || !translated) return
-
-        cfg.onTranslated(translated)
-
-        // ← Joue le TTS seulement si activé
-        if (ttsEnabled) {
-          speakOtherPlayers(translated, cfg.headsetDeviceId, cfg.targetLang)
-            .catch((err: unknown) => console.error('Erreur TTS:', err))
-        }
-
-      } catch {
-        cfg.onError('Erreur traduction')
-      }
-    }
   })
 
-  op.onTranslated((text) => {
-    current?.onTranslated(text)
+  // ─── Traduction reçue du process principal (sans CORS) ───────────────────
+  op.onTranslated((translated) => {
+    if (!current || !translated) return
+    const cfg = current
+    cfg.onTranslated(translated)
+
+    // ← Joue le TTS seulement si activé
+    if (ttsEnabled) {
+      speakOtherPlayers(translated, cfg.headsetDeviceId, cfg.targetLang)
+        .catch((err: unknown) => console.error('Erreur TTS:', err))
+    }
   })
 
   try {
@@ -122,12 +86,9 @@ export async function startOtherPlayers(config: OtherPlayersConfig): Promise<voi
 }
 
 export function stopOtherPlayers(): void {
-  pendingTranslation = null
-  lastInterimText = ''
   if (typeof window !== 'undefined' && window.electron?.otherPlayers) {
     window.electron.otherPlayers.removeListeners()
     void window.electron.otherPlayers.stop()
   }
   current = null
-  lastTranslatedText = ''
 }
