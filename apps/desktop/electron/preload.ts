@@ -120,6 +120,11 @@ contextBridge.exposeInMainWorld('electron', {
     play: (deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) =>
       ipcRenderer.invoke('virtual-audio:play', deviceId, pcmBuffer, sampleRate, channels),
   },
+  // ─── Pont HTTPS — contourne le CORS en dev et en production ─────────────
+  railway: {
+    post: (apiPath: string, body: unknown) => ipcRenderer.invoke('railway:post', apiPath, body),
+    postBinary: (apiPath: string, body: unknown) => ipcRenderer.invoke('railway:post-binary', apiPath, body),
+  },
 })
 
 declare global {
@@ -191,6 +196,10 @@ declare global {
       virtualAudio: {
         listDevices: () => Promise<Array<{ id: string, name: string }>>
         play: (deviceId: string, pcmBuffer: ArrayBuffer, sampleRate: number, channels: number) => Promise<{ success: boolean }>
+      }
+      railway: {
+        post: (apiPath: string, body: unknown) => Promise<any>
+        postBinary: (apiPath: string, body: unknown) => Promise<Buffer>
       }
     }
   }

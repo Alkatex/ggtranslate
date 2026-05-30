@@ -175,17 +175,23 @@ export async function translateText(
     }
   }
 
-  // ─── 3. API DeepL ─────────────────────────────────────────────────────────
-  const res = await fetch(`${API_URL}/ai/translate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, sourceLang, targetLang }),
-  })
+  // ─── 3. API DeepL — via IPC main process (bypass CORS) ou fetch direct ────
+  let translated: string | undefined
 
-  if (!res.ok) throw new Error('Erreur traduction')
-
-  const data = await res.json() as any
-  const translated = data.translated || data.translatedText
+  if (typeof window !== 'undefined' && window.electron?.railway) {
+    // Electron : appel via main process — aucune restriction CORS
+    const data = await window.electron.railway.post('/ai/translate', { text, sourceLang, targetLang })
+    translated = data.translated || data.translatedText
+  } else {
+    const res = await fetch(`${API_URL}/ai/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, sourceLang, targetLang }),
+    })
+    if (!res.ok) throw new Error('Erreur traduction')
+    const data = await res.json() as any
+    translated = data.translated || data.translatedText
+  }
 
   if (!translated) throw new Error('Réponse traduction invalide')
 

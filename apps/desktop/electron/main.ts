@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 import * as fs from 'fs'
+import * as https from 'https'
 
 let dir = __dirname
 for (let i = 0; i < 6; i++) {
@@ -374,4 +375,41 @@ ipcMain.handle('virtual-audio:play', async (_event, deviceId: string, pcmBuffer:
   const buffer = Buffer.from(pcmBuffer)
   const success = playAudioOnDevice(deviceId, buffer, sampleRate, channels)
   return { success }
+})
+
+// ─── Pont HTTPS Railway → bypass CORS en dev ET en production ─────────────────
+const RAILWAY_HOST = 'ggtranslatebackend-production.up.railway.app'
+
+function railwayPost(apiPath: string, body: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const buf = Buffer.from(body, 'utf8')
+    const req = https.request(
+      { hostname: RAILWAY_HOST, path: apiPath, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': buf.length } },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)))
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(Buffer.concat(chunks))
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${Buffer.concat(chunks).toString('utf8').slice(0, 200)}`))
+          }
+        })
+      }
+    )
+    req.on('error', reject)
+    req.write(buf)
+    req.end()
+  })
+}
+
+// JSON endpoint (translate, discord, billing…)
+ipcMain.handle('railway:post', async (_event, apiPath: string, bodyObj: unknown) => {
+  const raw = await railwayPost(apiPath, JSON.stringify(bodyObj))
+  return JSON.parse(raw.toString('utf8'))
+})
+
+// Binary endpoint (TTS — retourne les bytes MP3 au renderer)
+ipcMain.handle('railway:post-binary', async (_event, apiPath: string, bodyObj: unknown) => {
+  return await railwayPost(apiPath, JSON.stringify(bodyObj))
 })

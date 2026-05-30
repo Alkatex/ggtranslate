@@ -175,16 +175,22 @@ async function playAudio(
   targetLang: string,
   effectId: string = 'normal'
 ): Promise<void> {
-  const res = await fetch(`${API_URL}/ai/tts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voice, targetLang }),
-  })
+  // ─── Fetch audio — via IPC main process (bypass CORS) ou fetch direct ────
+  let arrayBuffer: ArrayBuffer
 
-  if (!res.ok) throw new Error('Erreur TTS')
-
-  const audioBlob = await res.blob()
-  const arrayBuffer = await audioBlob.arrayBuffer()
+  if (typeof window !== 'undefined' && window.electron?.railway) {
+    // Electron : appel via main process — aucune restriction CORS
+    const buf: Buffer = await window.electron.railway.postBinary('/ai/tts', { text, voice, targetLang })
+    arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+  } else {
+    const res = await fetch(`${API_URL}/ai/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice, targetLang }),
+    })
+    if (!res.ok) throw new Error('Erreur TTS')
+    arrayBuffer = await res.arrayBuffer()
+  }
 
   // ─── Sans effet — HTMLAudioElement ────────────────────────────────────────
   if (!effectId || effectId === 'normal') {

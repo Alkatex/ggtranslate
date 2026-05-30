@@ -297,13 +297,18 @@ export function TranslatePage() {
     try {
       const sampleText = targetLang === 'fr' ? 'Bonjour ceci est un test' : 'Hello this is a test'
       const voice = targetLang === 'fr' ? 'aura-2-agathe-fr' : 'aura-2-thalia-en'
-      const res = await fetch(`${API_URL}/ai/tts`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: sampleText, voice, targetLang }),
-      })
-      if (!res.ok) throw new Error('TTS failed')
-      const blob = await res.blob()
-      const arrayBuffer = await blob.arrayBuffer()
+      let arrayBuffer: ArrayBuffer
+      if (window.electron?.railway) {
+        const buf = await window.electron.railway.postBinary('/ai/tts', { text: sampleText, voice, targetLang })
+        arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+      } else {
+        const res = await fetch(`${API_URL}/ai/tts`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: sampleText, voice, targetLang }),
+        })
+        if (!res.ok) throw new Error('TTS failed')
+        arrayBuffer = await (await res.blob()).arrayBuffer()
+      }
       if (effect.id === 'normal') {
         const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
         const url = URL.createObjectURL(audioBlob)

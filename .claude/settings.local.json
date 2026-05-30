@@ -14,7 +14,9 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(pnpm build:win)"
+      "Bash(pnpm build:win)",
+      "Bash(grep -o \"require.*https\\\\|node:https\\\\|https\\\\\\\\.request\\\\|RAILWAY_BACKEND\\\\|translateInMain\\\\|httpsPost\" D:/ggtranslate/apps/desktop/dist-electron/main.js)",
+      "Bash(grep \"require\\\\$\\\\$4\" D:/ggtranslate/apps/desktop/dist-electron/main.js)"
     ]
   }
 }
