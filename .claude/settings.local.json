@@ -11,7 +11,10 @@
       "Bash(node-gyp rebuild *)",
       "Bash(npx --version)",
       "Bash(npx node-gyp *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(pnpm build:win)"
     ]
   }
 }

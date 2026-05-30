@@ -2,21 +2,52 @@
 import { startOtherPlayersCapture, stopOtherPlayersCapture } from './otherPlayersCaptureService'
 import { Deepgram } from '@deepgram/sdk'
 import { BrowserWindow } from 'electron'
+import * as https from 'https'
 
-// ─── Traduction via Node.js fetch — aucune restriction CORS ───────────────────
-const RAILWAY_BACKEND = 'https://ggtranslatebackend-production.up.railway.app'
+// ─── Traduction via Node.js https — aucune restriction CORS ───────────────────
+const RAILWAY_BACKEND = 'ggtranslatebackend-production.up.railway.app'
+
+function httpsPost(hostname: string, path: string, body: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const buf = Buffer.from(body, 'utf8')
+    const req = https.request(
+      {
+        hostname,
+        path,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': buf.length,
+        },
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk: Buffer) => { data += chunk.toString() })
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(data)
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`))
+          }
+        })
+      }
+    )
+    req.on('error', reject)
+    req.write(buf)
+    req.end()
+  })
+}
 
 async function translateInMain(text: string, sourceLang: string, targetLang: string): Promise<string> {
   if (!text.trim() || sourceLang === targetLang) return text
   try {
-    const res = await fetch(`${RAILWAY_BACKEND}/ai/translate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, sourceLang, targetLang }),
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json() as any
-    return data.translated || data.translatedText || text
+    const body = JSON.stringify({ text, sourceLang, targetLang })
+    const raw = await httpsPost(RAILWAY_BACKEND, '/ai/translate', body)
+    const data = JSON.parse(raw) as any
+    const translated = data.translated || data.translatedText
+    if (!translated) throw new Error('Champ translated absent de la réponse')
+    console.log(`✅ Traduit (main): "${text.slice(0, 20)}" → "${translated.slice(0, 20)}"`)
+    return translated
   } catch (err) {
     console.error('❌ Traduction main process échouée:', err)
     return text
